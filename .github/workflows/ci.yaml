@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Clone repo
+      uses: actions/checkout@v2
+    - name: Set up python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.12
+        cache: 'pip'
+    # - name: Install Prometheo from source
+    #   run: |
+    #     git clone https://github.com/WorldCereal/prometheo.git
+    #     cd prometheo
+    #     pip install .
+    #     cd ..
+    # - name: Install WorldCereal from source
+    #   run: |
+    #     git clone https://github.com/WorldCereal/worldcereal-classification.git
+    #     cd worldcereal-classification
+    #     pip install .
+    #     cd ..
+    - name: Install WorldCereal-Cop4GEOGLAM dependencies
+      run: pip install ".[dev]"
+    - name: Run tests
+      run: python -m pytest -s --log-cli-level=INFO tests
+      env:
+        OPENEO_AUTH_METHOD: client_credentials
+        OPENEO_OIDC_DEVICE_CODE_MAX_POLL_TIME: 5
+        OPENEO_AUTH_PROVIDER_ID_CDSE: CDSE
+        OPENEO_AUTH_CLIENT_ID_CDSE: openeo-worldcereal-service-account
+        OPENEO_AUTH_CLIENT_SECRET_CDSE: ${{ secrets.OPENEO_AUTH_CLIENT_SECRET_CDSE }}

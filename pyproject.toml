@@ -1,0 +1,83 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+exclude = [
+  "/dist",
+  "/notebooks",
+  "/scripts",
+  "/bin",
+  "/tests",
+]
+
+[tool.hatch.version]
+path = "src/worldcereal_in_season/_version.py"
+pattern = "^__version__ = ['\"](?P<version>[^'\"]+)['\"]$"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project]
+name = "worldcereal-in-season"
+authors = [
+  { name="Kristof Van Tricht" },
+  { name="Giorgia Milli" },
+  { name="Christina Butsko" },
+]
+description = "WorldCereal classification extension module for Copernicus4GEOGLAM"
+readme = "README.md"
+requires-python = ">=3.8"
+dynamic = ["version"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "boto3==1.35.30",
+    "catboost==1.2.5",
+    "cftime",  
+    "geojson",  
+    "geopandas",  
+    "h3==4.1.0",  
+    "h5netcdf>=1.1.0",  
+    "loguru>=0.7.2",  
+    "netcdf4<=1.6.4",  
+    "numpy<2.0.0",  
+    "openeo==0.35.0",  
+    "openeo-gfmap==0.4.4",  
+    "pyarrow",  
+    "pydantic==2.8.0",  
+    "scipy",
+    "scikit-learn==1.5.0",
+    "torch==2.3.1",
+    "tqdm",
+    "worldcereal @ git+https://github.com/WorldCereal/worldcereal-classification.git@257-finetuning-with-prometheo",
+    "xarray>=2022.3.0"
+  ]
+
+[project.urls]
+"Homepage" = "https://github.com/WorldCereal/worldcereal-cop4geoglam"
+"Bug Tracker" = "https://github.com/WorldCereal/worldcereal-cop4geoglam/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4.0",
+  "pytest-depends",  
+  "matplotlib>=3.3.0"
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+  "tests",
+]
+addopts = [
+  "--import-mode=prepend",
+]
+
+[tool.ruff]
+line-length = 88
+extend-select = ["I"]  # Enable import sorting
+
+[tool.ruff.lint]
+select = ["E", "F"]
