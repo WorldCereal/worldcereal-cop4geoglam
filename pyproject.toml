@@ -12,14 +12,14 @@ exclude = [
 ]
 
 [tool.hatch.version]
-path = "src/worldcereal_in_season/_version.py"
+path = "src/worldcereal_cop4geoglam/_version.py"
 pattern = "^__version__ = ['\"](?P<version>[^'\"]+)['\"]$"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [project]
-name = "worldcereal-in-season"
+name = "worldcereal-cop4geoglam"
 authors = [
   { name="Kristof Van Tricht" },
   { name="Giorgia Milli" },
