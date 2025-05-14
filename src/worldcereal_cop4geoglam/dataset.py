@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, List, Literal, Optional, Tuple, Sequence, Union
+from typing import Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -15,7 +15,7 @@ from prometheo.predictors import (
 )
 
 
-class Cop4GeoglamDataset(Dataset):
+class Cop4GeoDataset(Dataset):
     BAND_MAPPING = {
         "OPTICAL-B02-ts{}-10m": "B2",
         "OPTICAL-B03-ts{}-10m": "B3",
@@ -247,14 +247,14 @@ class Cop4GeoglamDataset(Dataset):
         return s1, s2, meteo, dem
 
 
-class Cop4GeoglamDatasetLabelledDataset(Cop4GeoglamDataset):
+class Cop4GeoDatasetLabelledDataset(Cop4GeoDataset):
 
     def __init__(
         self,
         dataframe,
         task_type: Literal["binary", "multiclass", "regression"] = "binary",
         num_outputs: int = 1,
-        classes_list: Union[np.ndarray, List[str]] = [],,
+        classes_list: Union[np.ndarray, List[str]] = [],
         time_explicit: bool = False,
         augment: bool = False,
         label_jitter: int = 0,       # ± timesteps to jitter true label pos, for time_explicit only
@@ -287,13 +287,11 @@ class Cop4GeoglamDatasetLabelledDataset(Cop4GeoglamDataset):
             "multiclass",
         ], f"Invalid task type `{task_type}` for labelled dataset"
 
-        dataframe = dataframe.loc[~dataframe.ewoc_code < 1100000000]
-
         super().__init__(
             dataframe, 
             task_type=task_type, 
             num_outputs=num_outputs,
-            augment=augment
+            augment=augment,
             **kwargs
         )
         self.classes_list = classes_list
