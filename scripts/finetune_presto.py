@@ -7,32 +7,32 @@ from typing import Literal
 import matplotlib.pyplot as plt
 import torch
 from loguru import logger
-from torch import nn
-from torch.optim import AdamW, lr_scheduler
-from torch.utils.data import DataLoader
-from worldcereal.train.data import get_training_dfs_from_parquet
-from worldcereal_cop4geoglam.datasets import MaskingStrategy
-from worldcereal_cop4geoglam.finetuning_utils import (
-    CLASS_MAPPINGS,
-    detailed_time_series_eval,
-    evaluate_finetuned_model,
-    prepare_training_datasets,
-)
-
 from prometheo.finetune import Hyperparams, run_finetuning
 from prometheo.models.presto import param_groups_lrd
 from prometheo.models.presto.wrapper import PretrainedPrestoWrapper
 from prometheo.predictors import NODATAVALUE
 from prometheo.utils import DEFAULT_SEED, device, initialize_logging
+from torch import nn
+from torch.optim import AdamW, lr_scheduler
+from torch.utils.data import DataLoader
+
+from worldcereal_cop4geoglam.datasets import MaskingStrategy
+from worldcereal_cop4geoglam.finetuning_utils import (
+    CLASS_MAPPINGS,
+    detailed_time_series_eval,
+    evaluate_finetuned_model,
+    load_dataset,
+    prepare_training_datasets,
+)
 
 
 def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad"):
     if timestep_freq == "month":
         parquet_files = [
+            "/home/vito/millig/projects/worldcereal/COP4GEOGLAM/kenya/2021_KEN_COPERNICUS-GEOGLAM-LR_POINT_111.geoparquet"
         ]
     elif timestep_freq == "dekad":
-        parquet_files = [
-        ]
+        parquet_files = []
     else:
         raise ValueError(
             f"timestep_freq {timestep_freq} is not supported. Supported values are 'month' and 'dekad'."
@@ -103,14 +103,12 @@ def main(args):
     )
 
     # Get the train/val/test dataframes
-    train_df, val_df, test_df = get_training_dfs_from_parquet(
+    df = load_dataset(
         parquet_files,
-        timestep_freq=timestep_freq,
-        finetune_classes=finetune_classes,
-        class_mappings=CLASS_MAPPINGS,
-        val_samples_file=val_samples_file,
-        debug=debug,
+        timestep_freq="month",
+        finetune_classes="CROPLAND",
     )
+    train_df, val_df, test_df = train_test_val_split(df, group_sample_by="1km_patch")
 
     train_df.to_parquet(Path(output_dir) / "train_df.parquet")
     val_df.to_parquet(Path(output_dir) / "val_df.parquet")
@@ -196,14 +194,16 @@ def main(args):
         train_ds,
         batch_size=hyperparams.batch_size,
         shuffle=True if not use_balancing else None,
-        sampler=train_ds.get_balanced_sampler(
-            generator=generator,
-            sampling_class="finetune_class",
-            method="log",
-            clip_range=(0.2, 10),
-        )
-        if use_balancing
-        else None,
+        sampler=(
+            train_ds.get_balanced_sampler(
+                generator=generator,
+                sampling_class="finetune_class",
+                method="log",
+                clip_range=(0.2, 10),
+            )
+            if use_balancing
+            else None
+        ),
         generator=generator if not use_balancing else None,
         num_workers=hyperparams.num_workers,
     )

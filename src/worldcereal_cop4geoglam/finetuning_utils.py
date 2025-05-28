@@ -5,14 +5,18 @@ from typing import List, Literal, Optional, Sequence, Tuple, cast
 import numpy as np
 import pandas as pd
 import torch
+from loguru import logger
+from prometheo.predictors import NODATAVALUE, Predictors
+from prometheo.utils import device
+from worldcereal.utils.refdata import map_classes
+from worldcereal.utils.timeseries import process_parquet
+
 from worldcereal_cop4geoglam.datasets import (
     Cop4GeoLabelledDataset,
     MaskingMode,
     MaskingStrategy,
 )
-
-from prometheo.predictors import NODATAVALUE, Predictors
-from prometheo.utils import device
+import random
 
 # Load class mappings
 _data_dir = Path(__file__).parent / "data"
@@ -475,3 +479,104 @@ def detailed_time_series_eval(
             )
 
     return pd.DataFrame.from_records(records)
+
+
+def load_dataset(
+    parquet_files: Sequence[str | Path],
+    timestep_freq: Literal["month", "dekad"] = "month",
+    finetune_classes: Optional[List[str]] = "CROPLAND",
+    class_mappings: Optional[dict] = None,
+    debug=False,
+):  # type: ignore):
+    if isinstance(parquet_files, (str, Path)):
+        # If a single file is provided, convert it to a list
+        parquet_files = [parquet_files]
+
+    if debug:
+        # select 1st file in debug mode
+        parquet_files = parquet_files[:1]
+        logger.warning("Debug mode is enabled.")
+
+    df = None
+    for f in parquet_files:
+        logger.info(f"Processing {f}")
+        _data = pd.read_parquet(f, engine="fastparquet")
+        _data = _data[_data["sample_id"].notnull()]
+        _data["ewoc_code"] = _data["ewoc_code"].astype(int)
+
+        for tcol in ["valid_time", "start_time", "end_time", "timestamp"]:
+            if tcol in _data.columns:
+                _data[tcol] = pd.to_datetime(_data[tcol], utc=True)
+                _data[tcol] = _data[tcol].dt.tz_localize(None)
+
+        _data_pivot = process_parquet(_data, freq=timestep_freq)
+        _data_pivot.reset_index(inplace=True)
+        df = _data_pivot if df is None else pd.concat([df, _data_pivot])
+
+    df = map_classes(df, finetune_classes, class_mappings=CLASS_MAPPINGS)
+    return df
+
+
+def train_test_val_split(
+    df,
+    group_sample_by=None,
+    uniform_sample_by=None,
+    sampling_frac=0.8,
+    nmin_per_class=5,
+):
+    """
+    Splits the data into train, val and test sets.
+    The split is done based on the unique parentname values.
+    """
+    random.seed(3)
+    if group_sample_by is not None:
+        parentnames = df[group_sample_by].unique()
+        parentname_train = random.sample(
+            list(parentnames), int(len(parentnames) * sampling_frac)
+        )
+        df_sample = df.copy()
+        df_train = df_sample[df_sample[group_sample_by].isin(parentname_train)]
+
+        # split in val and test
+        df_val_test = df_sample[~df_sample[group_sample_by].isin(parentname_train)]
+        parentname_val_test = df_val_test[group_sample_by].unique()
+        parentname_val = random.sample(
+            list(parentname_val_test), int(len(parentname_val_test) * 0.5)
+        )
+        df_val = df_val_test[df_val_test[group_sample_by].isin(parentname_val)]
+        df_test = df_val_test[~df_val_test[group_sample_by].isin(parentname_val)]
+
+    elif uniform_sample_by is not None:
+        group_counts = df[uniform_sample_by].value_counts()
+        valid_groups = group_counts[group_counts >= nmin_per_class].index
+        if len(valid_groups) != len(group_counts):
+            logger.warning(
+                f"Some groups have less than {nmin_per_class} samples. They will be excluded from the split."
+            )
+        else:
+            logger.info(
+                f"All groups have at least {nmin_per_class} samples. Proceeding with the split."
+            )
+        df_sample = df[df[uniform_sample_by].isin(valid_groups)].reset_index(drop=True)
+        df_train = df_sample.groupby(uniform_sample_by).sample(
+            frac=sampling_frac, random_state=3
+        )
+        df_val_test = df_sample[~df_sample.index.isin(df_train.index)]
+        df_val = df_val_test.groupby(uniform_sample_by).sample(frac=0.5, random_state=3)
+        df_test = df_val_test[~df_val_test.index.isin(df_val.index)]
+    else:
+        raise ValueError(
+            "Either group_sample_by or uniform_sample_by must be provided to split the data."
+        )
+
+    logger.info(
+        f"Training set size: {len(df_train)}, {len(df_train)/len(df):2f} total dataset"
+    )
+    logger.info(
+        f"Validation set size: {len(df_val)}, {len(df_val)/len(df):2f} total dataset"
+    )
+    logger.info(
+        f"Test set size: {len(df_test)}, {len(df_test)/len(df):2f} total dataset"
+    )
+
+    return df_train, df_val, df_test
