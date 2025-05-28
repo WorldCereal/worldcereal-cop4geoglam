@@ -1,5 +1,4 @@
 import unittest
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -28,7 +27,8 @@ class TestCop4GeoDataset(unittest.TestCase):
             "start_date": ["2021-01-01"] * self.num_samples,
             "end_date": ["2022-01-01"] * self.num_samples,
             "available_timesteps": [self.num_timesteps] * self.num_samples,
-            "valid_position": [6] * self.num_samples,  # Middle of the time series
+            # Middle of the time series
+            "valid_position": [6] * self.num_samples,
         }
 
         # Add band data for each timestep
@@ -48,14 +48,16 @@ class TestCop4GeoDataset(unittest.TestCase):
                 ("OPTICAL-B11-ts{}-20m", "B11"),
                 ("OPTICAL-B12-ts{}-20m", "B12"),
             ]:
-                data[band_template.format(ts)] = [1000 + ts * 10] * self.num_samples
+                data[band_template.format(ts)] = [
+                    1000 + ts * 10] * self.num_samples
 
             # Add SAR bands
             for band_template, _ in [
                 ("SAR-VH-ts{}-20m", "VH"),
                 ("SAR-VV-ts{}-20m", "VV"),
             ]:
-                data[band_template.format(ts)] = [0.01 + ts * 0.001] * self.num_samples
+                data[band_template.format(ts)] = [
+                    0.01 + ts * 0.001] * self.num_samples
 
             # Add METEO bands
             for band_template, _ in [
@@ -80,7 +82,8 @@ class TestCop4GeoDataset(unittest.TestCase):
         ]
 
         # Initialize the datasets
-        self.base_ds = Cop4GeoDataset(self.df, num_timesteps=self.num_timesteps)
+        self.base_ds = Cop4GeoDataset(
+            self.df, num_timesteps=self.num_timesteps)
         self.binary_ds = Cop4GeoLabelledDataset(
             self.df, task_type="binary", num_outputs=1
         )
@@ -99,51 +102,54 @@ class TestCop4GeoDataset(unittest.TestCase):
         self.assertEqual(len(self.base_ds), self.num_samples)
         self.assertEqual(len(self.binary_ds), self.num_samples)
         self.assertEqual(len(self.multiclass_ds), self.num_samples)
-        
+
     def test_get_timestep_positions(self):
         """Test getting timestep positions works correctly."""
         row = pd.Series.to_dict(self.df.iloc[0, :])
-        timestep_positions, valid_position = self.base_ds.get_timestep_positions(row)
-        
+        timestep_positions, valid_position = self.base_ds.get_timestep_positions(
+            row)
+
         # Check we got the right number of timesteps
         self.assertEqual(len(timestep_positions), self.num_timesteps)
-        
+
         # Check the valid position is in the timestep positions
         self.assertIn(valid_position, timestep_positions)
-        
+
         # Test with augmentation - ensure we have enough timesteps for augmentation
         # Modify the row to have a larger number of available timesteps
         augmented_row = row.copy()
-        augmented_row["available_timesteps"] = self.num_timesteps + 4  # Increase number of available timesteps
-        
+        # Increase number of available timesteps
+        augmented_row["available_timesteps"] = self.num_timesteps + 4
+
         # Test with augmentation
-        timestep_positions, valid_position = self.base_ds.get_timestep_positions(augmented_row)
+        timestep_positions, valid_position = self.base_ds.get_timestep_positions(
+            augmented_row)
         self.assertEqual(len(timestep_positions), self.num_timesteps)
         self.assertIn(valid_position, timestep_positions)
-    
+
     def test_initialize_inputs(self):
         """Test input initialization creates correct array shapes."""
         s1, s2, meteo, dem = self.base_ds.initialize_inputs()
-        
+
         # Check shapes
         self.assertEqual(s1.shape, (1, 1, self.num_timesteps, len(S1_BANDS)))
         self.assertEqual(s2.shape, (1, 1, self.num_timesteps, len(S2_BANDS)))
         self.assertEqual(meteo.shape, (self.num_timesteps, len(METEO_BANDS)))
         self.assertEqual(dem.shape, (1, 1, len(DEM_BANDS)))
-        
+
         # Check all initialized with NODATAVALUE
         self.assertTrue(np.all(s1 == NODATAVALUE))
         self.assertTrue(np.all(s2 == NODATAVALUE))
         self.assertTrue(np.all(meteo == NODATAVALUE))
         self.assertTrue(np.all(dem == NODATAVALUE))
-        
+
     def test_get_inputs(self):
         """Test getting inputs from a row."""
         row = pd.Series.to_dict(self.df.iloc[0, :])
         timestep_positions, _ = self.base_ds.get_timestep_positions(row)
-        
+
         inputs = self.base_ds.get_inputs(row, timestep_positions)
-        
+
         # Check all required keys are in the inputs
         self.assertIn('s1', inputs)
         self.assertIn('s2', inputs)
@@ -151,41 +157,44 @@ class TestCop4GeoDataset(unittest.TestCase):
         self.assertIn('dem', inputs)
         self.assertIn('latlon', inputs)
         self.assertIn('timestamps', inputs)
-        
+
         # Check shapes
-        self.assertEqual(inputs['s1'].shape, (1, 1, self.num_timesteps, len(S1_BANDS)))
-        self.assertEqual(inputs['s2'].shape, (1, 1, self.num_timesteps, len(S2_BANDS)))
-        self.assertEqual(inputs['meteo'].shape, (self.num_timesteps, len(METEO_BANDS)))
+        self.assertEqual(inputs['s1'].shape,
+                         (1, 1, self.num_timesteps, len(S1_BANDS)))
+        self.assertEqual(inputs['s2'].shape,
+                         (1, 1, self.num_timesteps, len(S2_BANDS)))
+        self.assertEqual(inputs['meteo'].shape,
+                         (self.num_timesteps, len(METEO_BANDS)))
         self.assertEqual(inputs['dem'].shape, (1, 1, len(DEM_BANDS)))
         self.assertEqual(inputs['latlon'].shape, (2,))
         self.assertEqual(inputs['timestamps'].shape, (self.num_timesteps, 3))
-        
+
         # Check data has been filled in (not all NODATAVALUE)
         self.assertTrue(np.any(inputs['s1'] != NODATAVALUE))
         self.assertTrue(np.any(inputs['s2'] != NODATAVALUE))
         self.assertTrue(np.any(inputs['meteo'] != NODATAVALUE))
         self.assertTrue(np.any(inputs['dem'] != NODATAVALUE))
-    
+
     def test_getitem(self):
         """Test __getitem__ returns correct type."""
         item = self.base_ds[0]
         self.assertEqual(type(item).__name__, 'Predictors')
-        
+
         # Test labelled dataset
         item = self.binary_ds[0]
         self.assertEqual(type(item).__name__, 'Predictors')
         self.assertTrue(hasattr(item, 'label'))
-        
+
     def test_binary_label(self):
         """Test binary labelled dataset returns correct labels."""
         item = self.binary_ds[0]
         # Cropland should be mapped to 1 (positive class)
         self.assertEqual(item.label[0, 0, 0, 0], 1)
-        
+
         item = self.binary_ds[1]
         # not_cropland should be mapped to 0 (negative class)
         self.assertEqual(item.label[0, 0, 0, 0], 0)
-        
+
     def test_multiclass_label(self):
         """Test multiclass labelled dataset returns correct labels."""
         item = self.multiclass_ds[0]
@@ -195,23 +204,23 @@ class TestCop4GeoDataset(unittest.TestCase):
         item = self.multiclass_ds[4]
         # Fifth sample should have class index 1
         self.assertEqual(item.label[0, 0, 0, 0], 1)
-        
+
     def test_time_explicit_label(self):
         """Test time explicit labelled dataset returns correct label shape."""
         item = self.time_explicit_ds[0]
         # Label should have temporal dimension
         self.assertEqual(item.label.shape, (1, 1, self.num_timesteps, 1))
-        
+
         # For time_explicit, valid_position should have a value, other positions should be NODATAVALUE
         row = pd.Series.to_dict(self.df.iloc[0, :])
         _, valid_position = self.time_explicit_ds.get_timestep_positions(row)
-        
+
         # Check only one position has a value
         valid_values = (item.label != NODATAVALUE).sum()
         self.assertEqual(valid_values, 1)
 
 
-class TestTimeUtilities(unittest.TestCase): 
+class TestTimeUtilities(unittest.TestCase):
     def test_align_to_composite_window(self):
         """Test aligning dates to composite window."""
         # Test with dekad frequency
@@ -219,60 +228,63 @@ class TestTimeUtilities(unittest.TestCase):
         end_date = np.datetime64("2021-01-24", "D")
         aligned_start = align_to_composite_window(start_date, "dekad")
         aligned_end = align_to_composite_window(end_date, "dekad")
-        
+
         # Should align to first dekad of January
         self.assertEqual(aligned_start, np.datetime64("2021-01-01", "D"))
         self.assertEqual(aligned_end, np.datetime64("2021-01-21", "D"))
-        
+
         # Test with monthly frequency
         start_date = np.datetime64("2021-01-15", "D")
         end_date = np.datetime64("2021-02-10", "D")
         aligned_start = align_to_composite_window(start_date, "month")
         aligned_end = align_to_composite_window(end_date, "month")
-        
+
         # Should align to first day of month
         self.assertEqual(aligned_start, np.datetime64("2021-01-01", "D"))
         self.assertEqual(aligned_end, np.datetime64("2021-02-01", "D"))
-        
+
     def test_get_monthly_timestamp_components(self):
         """Test getting month timestamp components."""
         start_date = np.datetime64("2021-01-03", "D")
         end_date = np.datetime64("2021-12-24", "D")
-        
-        days, months, years = get_monthly_timestamp_components(start_date, end_date)
-        
+
+        days, months, years = get_monthly_timestamp_components(
+            start_date, end_date)
+
         # Should have 12 months
         self.assertEqual(len(days), 12)
         self.assertEqual(len(months), 12)
         self.assertEqual(len(years), 12)
-        
+
         # All days should be 1 (first day of month)
         self.assertTrue(np.all(days == 1))
-        
+
         # Months should be 1-12
         self.assertTrue(np.all(months == np.arange(1, 13)))
-        
+
         # All years should be 2021
         self.assertTrue(np.all(years == 2021))
-        
+
     def test_get_dekad_timestamp_components(self):
         """Test getting dekad timestamp components."""
         start_date = np.datetime64("2021-01-03", "D")
         end_date = np.datetime64("2021-01-24", "D")
-        
-        days, months, years = get_dekad_timestamp_components(start_date, end_date)
-        
+
+        days, months, years = get_dekad_timestamp_components(
+            start_date, end_date)
+
         # Should have 3 dekads per month
         self.assertEqual(len(days), 3)
-        
+
         # Days should be 1, 11, 21 for first month
         self.assertTrue(np.all(days == np.array([1, 11, 21])))
-        
+
         # All months should be 1 (January)
         self.assertTrue(np.all(months == 1))
-        
+
         # All years should be 2021
         self.assertTrue(np.all(years == 2021))
+
 
 class TestBalancedSampler(unittest.TestCase):
     def test_equal_frequencies(self):
@@ -321,6 +333,7 @@ class TestBalancedSampler(unittest.TestCase):
         self.assertEqual(sampler.num_samples, 100)
         self.assertTrue(sampler.replacement)
 
+
 class TestGetLabel(unittest.TestCase):
     def setUp(self):
         # one‐row dataframes to drive get_label directly
@@ -343,7 +356,8 @@ class TestGetLabel(unittest.TestCase):
             num_timesteps=5
         )
         row = self.df_bin.iloc[0].to_dict()
-        lbl = ds.get_label(row, task_type="binary", classes_list=None, valid_position=None)
+        lbl = ds.get_label(row, task_type="binary",
+                           classes_list=None, valid_position=None)
         # shape should be (1,1,1,1)
         self.assertEqual(lbl.shape, (1, 1, 1, 1))
         # positive class → 1
@@ -355,7 +369,8 @@ class TestGetLabel(unittest.TestCase):
             num_timesteps=5
         )
         rown = self.df_bin_neg.iloc[0].to_dict()
-        lbln = dsn.get_label(rown, task_type="binary", classes_list=None, valid_position=None)
+        lbln = dsn.get_label(rown, task_type="binary",
+                             classes_list=None, valid_position=None)
         self.assertEqual(int(lbln[0, 0, 0, 0]), 0)
 
     def test_time_explicit_all_positions(self):
@@ -365,7 +380,8 @@ class TestGetLabel(unittest.TestCase):
             num_timesteps=4
         )
         row = self.df_bin.iloc[0].to_dict()
-        lbl = ds.get_label(row, task_type="binary", classes_list=None, valid_position=None)
+        lbl = ds.get_label(row, task_type="binary",
+                           classes_list=None, valid_position=None)
         # shape (1,1,4,1) and all entries ==1
         self.assertEqual(lbl.shape, (1, 1, 4, 1))
         self.assertTrue((lbl[..., 0] == 1).all())
@@ -378,7 +394,8 @@ class TestGetLabel(unittest.TestCase):
         )
         row = self.df_bin.iloc[0].to_dict()
         # pick valid_position=3 → window [2,3,4]
-        lbl = ds.get_label(row, task_type="binary", classes_list=None, valid_position=3)
+        lbl = ds.get_label(row, task_type="binary",
+                           classes_list=None, valid_position=3)
         self.assertEqual(lbl.shape, (1, 1, 7, 1))
         # exactly three non‐NODATAVALUE entries
         non_na = np.nonzero(lbl[0, 0, :, 0] != NODATAVALUE)[0]
@@ -410,6 +427,7 @@ class TestGetLabel(unittest.TestCase):
             self.assertTrue((mask[t] == NODATAVALUE).all())
         # at t=4, should match class index 1
         self.assertEqual(mask[4], 1)
-        
+
+
 if __name__ == '__main__':
     unittest.main()
