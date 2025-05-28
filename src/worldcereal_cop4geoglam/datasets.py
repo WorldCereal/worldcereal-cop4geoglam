@@ -225,7 +225,7 @@ class Cop4GeoDataset(WorldCerealDataset):
         return dict(
             s1=s1, s2=s2, meteo=meteo, dem=dem, latlon=latlon, timestamps=timestamps
         )
-
+        
 
 class Cop4GeoLabelledDataset(Cop4GeoDataset):
     def __init__(

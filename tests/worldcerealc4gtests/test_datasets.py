@@ -4,12 +4,12 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import torch
-from worldcereal_cop4geoglam.datasets import Cop4GeoDataset, Cop4GeoLabelledDataset
-from worldcereal_cop4geoglam.timeseries import (
-    get_correct_date,
-    get_monthly_dates,
-    get_timestamps,
+from worldcereal.train.datasets import (
+    align_to_composite_window,
+    get_dekad_timestamp_components,
+    get_monthly_timestamp_components,
 )
+from worldcereal_cop4geoglam.datasets import Cop4GeoDataset, Cop4GeoLabelledDataset
 
 from prometheo.predictors import DEM_BANDS, METEO_BANDS, NODATAVALUE, S1_BANDS, S2_BANDS
 
@@ -211,28 +211,35 @@ class TestCop4GeoDataset(unittest.TestCase):
         self.assertEqual(valid_values, 1)
 
 
-class TestTimeUtilities(unittest.TestCase):
-    def test_generate_month_sequence(self):
-        """Test generating a sequence of months."""
-        start_date = datetime(2021, 1, 1)
+class TestTimeUtilities(unittest.TestCase): 
+    def test_align_to_composite_window(self):
+        """Test aligning dates to composite window."""
+        # Test with dekad frequency
+        start_date = np.datetime64("2021-01-03", "D")
+        end_date = np.datetime64("2021-01-24", "D")
+        aligned_start = align_to_composite_window(start_date, "dekad")
+        aligned_end = align_to_composite_window(end_date, "dekad")
         
-        start_date = get_correct_date(start_date, timestep_freq="month")
-        days, months, years = get_monthly_dates(start_date, num_timesteps=12)
+        # Should align to first dekad of January
+        self.assertEqual(aligned_start, np.datetime64("2021-01-01", "D"))
+        self.assertEqual(aligned_end, np.datetime64("2021-01-21", "D"))
         
-        # Should have 12 months
-        self.assertEqual(len(months), 12)
+        # Test with monthly frequency
+        start_date = np.datetime64("2021-01-15", "D")
+        end_date = np.datetime64("2021-02-10", "D")
+        aligned_start = align_to_composite_window(start_date, "month")
+        aligned_end = align_to_composite_window(end_date, "month")
         
-        # First should be January 2021
-        self.assertEqual(f"{years[0]}-{months[0]}", "2021-1")
-        
-        # Last should be December 2021
-        self.assertEqual(f"{years[-1]}-{months[-1]}", "2021-12")
+        # Should align to first day of month
+        self.assertEqual(aligned_start, np.datetime64("2021-01-01", "D"))
+        self.assertEqual(aligned_end, np.datetime64("2021-02-01", "D"))
         
     def test_get_monthly_timestamp_components(self):
         """Test getting month timestamp components."""
-        start_date = datetime(2021, 1, 1)
+        start_date = np.datetime64("2021-01-03", "D")
+        end_date = np.datetime64("2021-12-24", "D")
         
-        days, months, years = get_timestamps(start_date, timestep_freq="month", num_timesteps=12)
+        days, months, years = get_monthly_timestamp_components(start_date, end_date)
         
         # Should have 12 months
         self.assertEqual(len(days), 12)
@@ -250,9 +257,10 @@ class TestTimeUtilities(unittest.TestCase):
         
     def test_get_dekad_timestamp_components(self):
         """Test getting dekad timestamp components."""
-        start_date = datetime(2021, 1, 1)
+        start_date = np.datetime64("2021-01-03", "D")
+        end_date = np.datetime64("2021-01-24", "D")
         
-        days, months, years = get_timestamps(start_date, timestep_freq="dekad", num_timesteps=3)
+        days, months, years = get_dekad_timestamp_components(start_date, end_date)
         
         # Should have 3 dekads per month
         self.assertEqual(len(days), 3)
