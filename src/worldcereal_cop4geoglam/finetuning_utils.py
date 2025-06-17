@@ -379,108 +379,6 @@ def evaluate_finetuned_model(
     return results_df, cm, cm_norm
 
 
-def detailed_time_series_eval(
-    finetuned_model,
-    test_df: pd.DataFrame,
-    test_ds: Cop4GeoLabelledDataset,
-    classes_list: Optional[List[str]],
-    device,
-) -> pd.DataFrame:
-    """
-    For each row in test_df, run the model in time_explicit mode
-    and collect (sample_id, t_rel, t_abs, month, true, pred, prob).
-    """
-    from datetime import datetime
-
-    from torch import no_grad
-
-    records = []
-    finetuned_model.eval()
-    for sample_idx, row in test_df.reset_index().iterrows():
-        # 1) recover the exact window & true‐pos
-        timesteps, valid_pos = test_ds.get_timestep_positions(row.to_dict())
-        # compute relative index of the valid position in this window
-        rel_pos = valid_pos - timesteps[0]
-        # absolute timestamps array: shape (T,3) = (day,month,year)
-        dmY = test_ds._get_timestamps(row.to_dict(), timesteps)
-        # make the type of dmY.tolist() explicit for unpacking
-        dmY_list = cast(List[Tuple[int, int, int]], dmY.tolist())
-        # build Predictors for this sample
-        inputs = test_ds.get_inputs(row.to_dict(), timesteps)
-        # batch‐ify the “per‐timestep” arrays so batch=1 everywhere
-        for k, v in list(inputs.items()):
-            if isinstance(v, np.ndarray):
-                inputs[k] = np.expand_dims(v, axis=0)
-
-        # if it's a real Cop4GeoLabelledDataset *and* model has a head,
-        # inject the label so PrestoWrapper.forward() won't complain
-        from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
-
-        if (
-            isinstance(test_ds, Cop4GeoLabelledDataset)
-            and getattr(finetuned_model, "head", None) is not None
-        ):
-            label_np = test_ds.get_label(
-                row.to_dict(),
-                task_type=test_ds.task_type,
-                classes_list=classes_list,
-                valid_position=rel_pos,
-            )
-            # label_np is shape (1,1,T,1), so batch it to (1,1,1,T,1)
-            inputs["label"] = np.expand_dims(label_np, axis=0)
-
-        pred_obj = Predictors(**inputs)
-        pred_obj = pred_obj.move_predictors_to_device(device)
-        # 2) forward pass
-        with no_grad():
-            out = finetuned_model(pred_obj)
-        # 3) derive probs & preds per‐timestep
-        # declare true_label ahead so it can be None in multiclass branch
-        true_label: Optional[str] = None
-        if test_ds.task_type == "binary":
-            probs = torch.sigmoid(out).cpu().numpy().flatten()  # (T,)
-            preds = (probs > 0.5).astype(int).flatten()  # (T,)
-            labels = ["not_crop", "crop"]
-            pred_classes = [labels[p] for p in preds]
-            # true class label
-            true_val = int(not row["finetune_class"].startswith("not_"))
-            true_label = labels[true_val]
-        else:
-            # require a non‐None classes_list here
-            if classes_list is None:
-                raise ValueError(
-                    "classes_list must be provided for multiclass detailed evaluation"
-                )
-            # get raw softmax‐probs over classes: shape (1,1,1,T,C)
-            probs_all = torch.softmax(out, dim=-1).cpu().numpy()
-            # argmax over the class‐dim → shape (1,1,1,T), then flatten to (T,)
-            preds = probs_all.argmax(axis=-1).reshape(-1)
-            # also max‐prob per timestep → shape (1,1,1,T) → flatten to (T,)
-            probs = probs_all.max(axis=-1).reshape(-1)
-            # map each predicted index to its class name
-            pred_classes = [classes_list[int(p)] for p in preds]
-            # now pick the “true” class label once (it doesn’t depend on t)
-            true_label = row["finetune_class"]
-
-        # 4) build records
-        for t_rel, (d, m, y) in enumerate(dmY_list):
-            # build a datetime so we can format month
-            dt_abs = datetime(int(y), int(m), int(d))
-            records.append(
-                {
-                    "sample_id": row.get("sample_id", sample_idx),
-                    "timestep_rel": t_rel,
-                    "timestep_abs": dt_abs,
-                    "month": dt_abs.strftime("%b"),
-                    "true_class": true_label if t_rel == rel_pos else pd.NA,
-                    "predicted_class": pred_classes[t_rel],
-                    "prob": float(probs[t_rel]),
-                }
-            )
-
-    return pd.DataFrame.from_records(records)
-
-
 def load_dataset(
     parquet_files: Sequence[str | Path],
     timestep_freq: Literal["month", "dekad"] = "month",
@@ -518,18 +416,49 @@ def load_dataset(
 
 
 def train_test_val_split(
-    df,
-    group_sample_by=None,
-    uniform_sample_by=None,
-    sampling_frac=0.8,
-    nmin_per_class=5,
-):
+    df: pd.DataFrame,
+    group_sample_by: Optional[str] = None,
+    uniform_sample_by: Optional[str] = None,
+    sampling_frac: float = 0.8,
+    nmin_per_class: int = 5,
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Splits the data into train, val and test sets.
-    The split is done based on the unique parentname values.
+    Splits a DataFrame into training, validation, and test sets using either group-based or uniform sampling.
+    
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame to split.
+    group_sample_by : str, optional
+        Column name to use for group-based sampling. If provided, the split is performed by randomly selecting groups for train/val/test.
+    uniform_sample_by : str, optional
+        Column name to use for uniform sampling. If provided, the split is performed by sampling uniformly within each group.
+    sampling_frac : float, default=0.8
+        Fraction of data (or groups) to use for the training set.
+    nmin_per_class : int, default=5
+        Minimum number of samples required per group/class for inclusion in the split (used only with uniform_sample_by).
+        
+    Returns
+    -------
+    df_train : pandas.DataFrame
+        DataFrame containing the training set.
+    df_val : pandas.DataFrame
+        DataFrame containing the validation set.
+    df_test : pandas.DataFrame
+        DataFrame containing the test set.
+        
+    Raises
+    ------
+    ValueError
+        If neither `group_sample_by` nor `uniform_sample_by` is provided.
     """
+    
     random.seed(3)
-    if group_sample_by is not None:
+    if group_sample_by is None and uniform_sample_by is None:
+        raise ValueError(
+            "Either group_sample_by or uniform_sample_by must be provided to split the data."
+        )
+    elif group_sample_by is not None:
         parentnames = df[group_sample_by].unique()
         parentname_train = random.sample(
             list(parentnames), int(len(parentnames) * sampling_frac)
