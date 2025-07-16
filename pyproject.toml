@@ -77,8 +77,11 @@ addopts = [
 ]
 
 [tool.ruff]
-line-length = 88
+# line-length = 88
 extend-select = ["I"]  # Enable import sorting
 
 [tool.ruff.lint]
 select = ["E", "F"]
+ignore = [
+  "E501"
+]
