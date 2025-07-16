@@ -77,11 +77,8 @@ addopts = [
 ]
 
 [tool.ruff]
-# line-length = 88
-extend-select = ["I"]  # Enable import sorting
-
-[tool.ruff.lint]
-select = ["E", "F"]
-ignore = [
+exclude = ["**/*.ipynb"]
+lint.extend-select = ["E", "F", "I"]
+lint.ignore = [
   "E501"
 ]
