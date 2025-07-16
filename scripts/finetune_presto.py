@@ -8,28 +8,29 @@ import matplotlib.pyplot as plt
 import torch
 from loguru import logger
 from prometheo.finetune import Hyperparams, run_finetuning
+from prometheo.models import Presto
 from prometheo.models.presto import param_groups_lrd
-from prometheo.models.presto.wrapper import PretrainedPrestoWrapper
 from prometheo.predictors import NODATAVALUE
 from prometheo.utils import DEFAULT_SEED, device, initialize_logging
 from torch import nn
 from torch.optim import AdamW, lr_scheduler
 from torch.utils.data import DataLoader
 
-from worldcereal_cop4geoglam.datasets import MaskingStrategy
+# from worldcereal_in_season.datasets import MaskingStrategy
+from worldcereal.train.data import get_training_dfs_from_parquet
 from worldcereal_cop4geoglam.finetuning_utils import (
-    CLASS_MAPPINGS,
-    detailed_time_series_eval,
     evaluate_finetuned_model,
-    load_dataset,
+    get_class_mappings,
     prepare_training_datasets,
 )
+
+CLASS_MAPPINGS = get_class_mappings()
 
 
 def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad"):
     if timestep_freq == "month":
         parquet_files = [
-            "/home/vito/millig/projects/worldcereal/COP4GEOGLAM/kenya/2021_KEN_COPERNICUS-GEOGLAM-LR_POINT_111.geoparquet"
+            "/home/vito/millig/projects/worldcereal/COP4GEOGLAM/kenya/SR_1km_clusters.geoparquet"
         ]
     elif timestep_freq == "dekad":
         parquet_files = []
@@ -67,22 +68,22 @@ def main(args):
     # ± timesteps to expand around label pos (true or moved), for time_explicit only; will only be set for training
     label_window = args.label_window
 
-    # In-season masking parameters
-    masking_strategy_train = args.masking_strategy_train
-    masking_strategy_val = args.masking_strategy_val
+    # # In-season masking parameters
+    # masking_strategy_train = args.masking_strategy_train
+    # masking_strategy_val = args.masking_strategy_val
 
     # Experiment signature
     timestamp_ind = datetime.now().strftime("%Y%m%d%H%M")
 
-    # Update experiment name to include masking info
-    if masking_strategy_train.mode == "random":
-        masking_info = f"random-masked-from-{masking_strategy_train.from_position}"
-    elif masking_strategy_train.mode == "fixed":
-        masking_info = f"masked-from-{masking_strategy_train.from_position}"
-    else:
-        masking_info = "no-masking"
+    # # Update experiment name to include masking info
+    # if masking_strategy_train.mode == "random":
+    #     masking_info = f"random-masked-from-{masking_strategy_train.from_position}"
+    # elif masking_strategy_train.mode == "fixed":
+    #     masking_info = f"masked-from-{masking_strategy_train.from_position}"
+    # else:
+    #     masking_info = "no-masking"
 
-    experiment_name = f"presto-prometheo-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-{masking_info}-run={timestamp_ind}"
+    experiment_name = f"presto-prometheo-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
     output_dir = f"/projects/worldcereal/COP4GEOGLAM/models/{experiment_name}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -103,12 +104,19 @@ def main(args):
     )
 
     # Get the train/val/test dataframes
-    df = load_dataset(
+    train_df, val_df, test_df = get_training_dfs_from_parquet(
         parquet_files,
-        timestep_freq="month",
-        finetune_classes="CROPLAND",
+        timestep_freq=timestep_freq,
+        finetune_classes=finetune_classes,
+        class_mappings=CLASS_MAPPINGS,
+        val_samples_file=val_samples_file,
+        debug=debug,
     )
-    train_df, val_df, test_df = train_test_val_split(df, group_sample_by="1km_patch")
+
+    logger.warning("Still applying a patch here ...")
+    train_df = train_df[train_df["available_timesteps"] >= 12]
+    val_df = val_df[val_df["available_timesteps"] >= 12]
+    test_df = test_df[test_df["available_timesteps"] >= 12]
 
     train_df.to_parquet(Path(output_dir) / "train_df.parquet")
     val_df.to_parquet(Path(output_dir) / "val_df.parquet")
@@ -147,14 +155,14 @@ def main(args):
         task_type=task_type_literal,
         num_outputs=num_outputs,
         classes_list=classes_list,
-        masking_strategy_train=masking_strategy_train,
-        masking_strategy_val=masking_strategy_val,
+        # masking_strategy_train=masking_strategy_train,
+        # masking_strategy_val=masking_strategy_val,
         label_jitter=label_jitter,
         label_window=label_window,
     )
 
     # Construct the finetuning model based on the pretrained model
-    model = PretrainedPrestoWrapper(
+    model = Presto(
         num_outputs=num_outputs,
         regression=False,
         pretrained_model_path=pretrained_model_path,
@@ -241,14 +249,23 @@ def main(args):
         classes_list=classes_list,
     )
 
-    # Define the per-label size
+    # Adjust figure size based on label length
+    max_label_length = max(len(label) for label in classes_list)
     per_label_size = 0.45  # Width/height in inches per label
+    label_length_factor = 0.1  # Additional size per character in the longest label
 
     # Define minimum and maximum limits if desired
     min_size = 6
     max_size = 30
 
-    fig_size = min(max(len(classes_list) * per_label_size, min_size), max_size)
+    # Compute figure size dynamically
+    fig_size = min(
+        max(
+            len(classes_list) * per_label_size + max_label_length * label_length_factor,
+            min_size,
+        ),
+        max_size,
+    )
 
     _, ax = plt.subplots(figsize=(fig_size, fig_size))
     confusionmatrix.plot(ax=ax, cmap=plt.cm.Blues, colorbar=False)
@@ -274,20 +291,6 @@ def main(args):
     logger.info("Evaluation results:")
     logger.info("\n" + eval_results.to_string(index=False))
 
-    if time_explicit:
-        detailed_df = detailed_time_series_eval(
-            finetuned_model,
-            test_df,
-            test_ds,
-            classes_list,
-            device,
-        )
-        detailed_df.to_csv(
-            Path(output_dir) / f"time-explicit_preds_{experiment_name}.csv", index=False
-        )
-        logger.info(
-            "Time-explicit predictions for each sample saved to detailed_preds.csv"
-        )
     logger.info("Finetuning completed!")
 
 
@@ -309,7 +312,7 @@ def parse_args(arg_list=None):
     )
 
     # Task setup
-    parser.add_argument("--finetune_classes", type=str, default="")
+    parser.add_argument("--finetune_classes", type=str, default="LANDCOVER14")
     parser.add_argument("--augment", action="store_true")
     parser.add_argument("--time_explicit", action="store_true")
     parser.add_argument("--debug", action="store_true")
@@ -319,53 +322,57 @@ def parse_args(arg_list=None):
     parser.add_argument("--label_jitter", type=int, default=0)
     parser.add_argument("--label_window", type=int, default=0)
 
-    # Masking strategy
-    parser.add_argument(
-        "--masking_train_mode",
-        type=str,
-        choices=["none", "fixed", "random"],
-        default="random",
-    )
-    parser.add_argument("--masking_train_from", type=int, default=5)
+    # # Masking strategy
+    # parser.add_argument(
+    #     "--masking_train_mode",
+    #     type=str,
+    #     choices=["none", "fixed", "random"],
+    #     default="random",
+    # )
+    # parser.add_argument("--masking_train_from", type=int, default=5)
 
-    parser.add_argument(
-        "--masking_val_mode",
-        type=str,
-        choices=["none", "fixed", "random"],
-        default="fixed",
-    )
-    parser.add_argument("--masking_val_from", type=int, default=6)
+    # parser.add_argument(
+    #     "--masking_val_mode",
+    #     type=str,
+    #     choices=["none", "fixed", "random"],
+    #     default="fixed",
+    # )
+    # parser.add_argument("--masking_val_from", type=int, default=6)
 
     args = parser.parse_args(arg_list)
 
-    # Compose masking strategy objects
-    args.masking_strategy_train = MaskingStrategy(
-        mode=args.masking_train_mode, from_position=args.masking_train_from
-    )
-    args.masking_strategy_val = MaskingStrategy(
-        mode=args.masking_val_mode, from_position=args.masking_val_from
-    )
+    # # Compose masking strategy objects
+    # args.masking_strategy_train = MaskingStrategy(
+    #     mode=args.masking_train_mode, from_position=args.masking_train_from
+    # )
+    # args.masking_strategy_val = MaskingStrategy(
+    #     mode=args.masking_val_mode, from_position=args.masking_val_from
+    # )
 
     return args
 
 
 if __name__ == "__main__":
-    # manual_args = [
-    #     "--experiment_tag",
-    #     "debug-run",
-    #     "--timestep_freq",
-    #     "dekad",
-    #     "--augment",
-    #     "--masking_train_mode",
-    #     "random",
-    #     "--masking_train_from",
-    #     "15",
-    #     "--masking_val_mode",
-    #     "fixed",
-    #     "--masking_val_from",
-    #     "18",
-    # ]
-    manual_args = None
+    manual_args = [
+        "--experiment_tag",
+        "debug-run",
+        "--timestep_freq",
+        "month",
+        "--augment",
+        "--finetune_classes",
+        "CROPLAND",  # LANDCOVER14
+        "--use_balancing",
+        "--debug",
+        # "--masking_train_mode",
+        # "random",
+        # "--masking_train_from",
+        # "15",
+        # "--masking_val_mode",
+        # "fixed",
+        # "--masking_val_from",
+        # "18",
+    ]
+    # manual_args = None
 
     args = parse_args(manual_args)
     main(args)

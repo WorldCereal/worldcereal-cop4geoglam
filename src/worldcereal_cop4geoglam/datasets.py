@@ -1,4 +1,3 @@
-from collections import Counter
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
@@ -6,9 +5,6 @@ from typing import Any, Dict, List, Literal, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 from loguru import logger
-from torch.utils.data import WeightedRandomSampler
-from worldcereal.train.datasets import WorldCerealDataset
-
 from prometheo.predictors import (
     DEM_BANDS,
     METEO_BANDS,
@@ -17,51 +13,8 @@ from prometheo.predictors import (
     S2_BANDS,
     Predictors,
 )
-
-
-def get_class_weights(
-    labels: np.ndarray[Any],
-    method: str = "balanced",  # 'balanced', 'log', or 'none'
-    clip_range: Optional[tuple] = None,  # e.g. (0.2, 10.0)
-    normalize: bool = True,
-) -> Dict[int, float]:
-    """
-    Compute class weights for classification tasks.
-
-    Args:
-        labels: list of integer class labels.
-        method: 'balanced' (scikit-learn style), or 'log' (log-scaled), or 'none'.
-        clip_range: tuple (min, max) to clip weights.
-        normalize: whether to rescale weights to mean = 1.
-
-    Returns:
-        class_weights_dict: dict mapping class index → weight
-    """
-    counts = Counter(labels)
-    classes = sorted(counts.keys())
-    total_samples = sum(counts.values())
-    num_classes = len(classes)
-    freq = np.array([counts[c] for c in classes], dtype=np.float32)
-
-    if method == "balanced":
-        weights = total_samples / (num_classes * freq)
-    elif method == "log":
-        inv_freq = 1.0 / freq
-        weights = np.log1p(inv_freq / np.mean(inv_freq))
-    elif method == "none":
-        weights = np.ones_like(freq)
-    else:
-        raise ValueError(f"Unknown method: {method}")
-
-    if clip_range:
-        logger.info(f"Clipping weights to range {clip_range}")
-        weights = np.clip(weights, clip_range[0], clip_range[1])
-
-    if normalize:
-        logger.info("Renormalizing weights to mean = 1")
-        weights = weights / weights.mean()
-
-    return dict(zip(classes, weights))
+from torch.utils.data import WeightedRandomSampler
+from worldcereal.train.datasets import WorldCerealDataset, get_class_weights
 
 
 class MaskingMode(str, Enum):
@@ -81,7 +34,6 @@ class MaskingStrategy:
             and self.from_position is None
         ):
             raise ValueError(f"'from_position' must be set for mode={self.mode}")
-
 
 
 class Cop4GeoDataset(WorldCerealDataset):
@@ -134,24 +86,6 @@ class Cop4GeoDataset(WorldCerealDataset):
                 f"Random mask position enabled: will randomly mask from positions {masking_strategy.from_position} to {num_timesteps - 1}"
             )
 
-    # def _get_center_point(
-    #     self, available_timesteps, valid_position, augment, min_edge_buffer
-    # ):
-    #     """Helper method to decide on the center point based on which to
-    #     extract the timesteps."""
-
-    #     # ADAPTATION FOR FRENCH IN-SEASON POC:
-    #     # VALID_POSITION IS 1ST OF JUNE -> SHIFT TO FIRST OF APRIL
-    #     # AS DEFAULT CENTER POINT
-    #     if self.timestep_freq == "month":
-    #         valid_position = valid_position - 2  # months
-    #     else:
-    #         valid_position = valid_position - 6  # dekads
-
-    #     return super()._get_center_point(
-    #         available_timesteps, valid_position, augment, min_edge_buffer
-    #     )
-
     @staticmethod
     def sample_mask_position(min_pos: int, max_pos: int, alpha=1.5, beta=2.5):
         """Samples from a Beta distribution skewed toward 0
@@ -165,7 +99,9 @@ class Cop4GeoDataset(WorldCerealDataset):
 
     def get_inputs(self, row_d: Dict, timestep_positions: List[int]) -> dict:
         # Get latlons
-        latlon = np.array([row_d["lat"], row_d["lon"]], dtype=np.float32)
+        latlon = np.reshape(
+            np.array([row_d["lat"], row_d["lon"]], dtype=np.float32), (1, 1, 2)
+        )
 
         # Get timestamps belonging to each timestep
         timestamps = self._get_timestamps(row_d, timestep_positions)
@@ -225,7 +161,7 @@ class Cop4GeoDataset(WorldCerealDataset):
         return dict(
             s1=s1, s2=s2, meteo=meteo, dem=dem, latlon=latlon, timestamps=timestamps
         )
-        
+
 
 class Cop4GeoLabelledDataset(Cop4GeoDataset):
     def __init__(
@@ -264,9 +200,10 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             ± timesteps to expand around label pos (true or moved), for time_explicit only, by default 0.
             Only used if `time_explicit` is True.
         """
-        assert task_type in ["binary", "multiclass"], (
-            f"Invalid task type `{task_type}` for labelled dataset"
-        )
+        assert task_type in [
+            "binary",
+            "multiclass",
+        ], f"Invalid task type `{task_type}` for labelled dataset"
 
         super().__init__(
             dataframe,
@@ -386,9 +323,9 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             else:
                 # apply jitter
                 # scalar valid_position must be an int here
-                assert isinstance(valid_position, int), (
-                    f"Expected single int valid_position, got {type(valid_position)}"
-                )
+                assert isinstance(
+                    valid_position, int
+                ), f"Expected single int valid_position, got {type(valid_position)}"
                 p = valid_position
                 if self.label_jitter > 0:
                     shift = np.random.randint(-self.label_jitter, self.label_jitter + 1)
