@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 
 # from worldcereal_in_season.datasets import MaskingStrategy
 from worldcereal.train.data import get_training_dfs_from_parquet
+
 from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
     get_class_mappings,

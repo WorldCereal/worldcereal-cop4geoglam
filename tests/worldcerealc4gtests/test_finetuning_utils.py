@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 from prometheo.predictors import NODATAVALUE
 from worldcereal.train.data import get_training_dfs_from_parquet
+
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
 from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
