@@ -42,6 +42,7 @@
     "CROPTYPE_Moldova": {
         "1101010001": "wheat",
         "1101010002": "wheat",
+        "1101020001": "barley",
         "1101040000": "other_temporary_crops",
         "1101060000": "maize",
         "1103020050": "other_temporary_crops",
