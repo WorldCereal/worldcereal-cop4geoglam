@@ -31,7 +31,7 @@ CLASS_MAPPINGS = get_class_mappings()
 def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad"):
     if timestep_freq == "month":
         parquet_files = [
-            "/home/vito/millig/projects/worldcereal/COP4GEOGLAM/kenya/SR_1km_clusters.geoparquet"
+            "/projects/worldcereal/COP4GEOGLAM/kenya/SR_1km_clusters.geoparquet"
         ]
     elif timestep_freq == "dekad":
         parquet_files = []
@@ -46,7 +46,7 @@ def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad"):
 def main(args):
     """Main function to run the finetuning process."""
     # ------------------------------------------
-    # Parameter settings (can become argparser)
+    # Parameter settings
     # ------------------------------------------
 
     experiment_tag = args.experiment_tag
@@ -56,7 +56,6 @@ def main(args):
     parquet_files = get_parquet_file_list(timestep_freq)
     val_samples_file = args.val_samples_file  # If None, random split is used
 
-    # Most popular maps: LANDCOVER14, CROPTYPE9, CROPTYPE0, CROPLAND2
     finetune_classes = args.finetune_classes
     augment = args.augment
     time_explicit = args.time_explicit
@@ -84,7 +83,7 @@ def main(args):
     # else:
     #     masking_info = "no-masking"
 
-    experiment_name = f"presto-prometheo-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
+    experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
     output_dir = f"/projects/worldcereal/COP4GEOGLAM/models/{experiment_name}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -188,11 +187,7 @@ def main(args):
         num_workers=num_workers,
     )
     parameters = param_groups_lrd(model)
-    # Seems that higher learning rate together with sceduler converges more effectively
-    # TO DO: double-check and formalize this finding
-    # optimizer = AdamW(parameters, lr=hyperparams.lr)
     optimizer = AdamW(parameters, lr=1e-4)
-    # optimizer = AdamW(parameters, lr=0.01)
     scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
     # Setup dataloaders

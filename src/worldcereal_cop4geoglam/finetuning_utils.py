@@ -40,8 +40,8 @@ def prepare_training_datasets(
     classes_list: Optional[List[str]] = None,
     # masking_strategy_train: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
     # masking_strategy_val: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
-    label_jitter=0,
-    label_window=0,
+    label_jitter: int = 0,
+    label_window: int = 0,
 ) -> Tuple[Cop4GeoLabelledDataset, Cop4GeoLabelledDataset, Cop4GeoLabelledDataset]:
     """
     Prepare training, validation, and test datasets for model training.
@@ -134,7 +134,6 @@ def evaluate_finetuned_model(
     time_explicit: bool = False,
     classes_list: Optional[List[str]] = None,
     # mask_positions: Optional[Sequence[int]] = None,
-    return_uncertainty: bool = False,
 ):
     """
     Evaluates a fine-tuned Presto model on a test dataset and calculates performance metrics.
@@ -171,7 +170,7 @@ def evaluate_finetuned_model(
     from torch.utils.data import DataLoader
 
     # storage for full distributions if we need entropy
-    all_probs_full: list[np.ndarray] = [] if return_uncertainty else []
+    # all_probs_full: list[np.ndarray] = [] 
 
     # if mask_positions is not None:
     #     # for each mask‐from position, run the full classification_report,
@@ -199,7 +198,6 @@ def evaluate_finetuned_model(
     #             time_explicit,
     #             classes_list,
     #             mask_positions=None,  # disable recursion
-    #             return_uncertainty=return_uncertainty,
     #         )
     #         df_k["masked_ts_from_pos"] = k
     #         # Get the timestamp for this mask position
@@ -266,15 +264,8 @@ def evaluate_finetuned_model(
 
                 preds = preds[targets != NODATAVALUE]
                 probs = probs[targets != NODATAVALUE]
-                probs_all = probs_all[targets[:, -1] != NODATAVALUE, :]
+                probs_all = probs_all[(targets != NODATAVALUE)[..., -1], :]
                 targets = targets[targets != NODATAVALUE]
-
-                if return_uncertainty:
-                    # flatten batch×timesteps into (N,C)
-                    if all_probs_full is not None:
-                        all_probs_full.append(
-                            probs_all.reshape(-1, probs_all.shape[-1])
-                        )
             else:
                 raise ValueError(f"Unsupported task type: {test_ds.task_type}")
 
@@ -363,14 +354,5 @@ def evaluate_finetuned_model(
     results_df.columns = pd.Index(
         ["class", "precision", "recall", "f1-score", "support"]
     )
-    # compute average predictive entropy if requested
-    if return_uncertainty:
-        from scipy.stats import entropy
-
-        pf = (
-            np.concatenate(all_probs_full, axis=0) if all_probs_full else np.empty((0,))
-        )  # shape (N, C)
-        ent = entropy(pf.T) if pf.size > 0 else np.array([])  # length N
-        results_df["avg_entropy"] = ent.mean() if ent.size > 0 else np.nan
 
     return results_df, cm, cm_norm

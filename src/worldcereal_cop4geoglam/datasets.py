@@ -45,7 +45,7 @@ class Cop4GeoDataset(WorldCerealDataset):
         task_type: Literal["ssl", "binary", "multiclass"] = "ssl",
         num_outputs: Optional[int] = None,
         augment: bool = False,
-        masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
+        # masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
     ):
         """WorldCereal base dataset. This dataset is typically used for
         self-supervised learning.
@@ -74,28 +74,28 @@ class Cop4GeoDataset(WorldCerealDataset):
             dataframe, num_timesteps, timestep_freq, task_type, num_outputs, augment
         )
 
-        # masking parameters
-        self.masking_strategy = masking_strategy
+        # # masking parameters
+        # self.masking_strategy = masking_strategy
 
-        if masking_strategy.mode == MaskingMode.FIXED:
-            logger.info(
-                f"masking enabled: masking from position {masking_strategy.from_position}"
-            )
-        if masking_strategy.mode == MaskingMode.RANDOM:
-            logger.info(
-                f"Random mask position enabled: will randomly mask from positions {masking_strategy.from_position} to {num_timesteps - 1}"
-            )
+        # if masking_strategy.mode == MaskingMode.FIXED:
+        #     logger.info(
+        #         f"masking enabled: masking from position {masking_strategy.from_position}"
+        #     )
+        # if masking_strategy.mode == MaskingMode.RANDOM:
+        #     logger.info(
+        #         f"Random mask position enabled: will randomly mask from positions {masking_strategy.from_position} to {num_timesteps - 1}"
+        #     )
 
-    @staticmethod
-    def sample_mask_position(min_pos: int, max_pos: int, alpha=1.5, beta=2.5):
-        """Samples from a Beta distribution skewed toward 0
-        alpha < beta → skew left (early cutoffs)
-        alpha = beta = 1 → uniform
-        alpha > beta → skew right (late cutoffs — not what we want)
-        """
-        r = np.random.beta(alpha, beta)
-        scaled = int(min_pos + r * (max_pos - min_pos))
-        return min(max(scaled, min_pos), max_pos)
+    # @staticmethod
+    # def sample_mask_position(min_pos: int, max_pos: int, alpha=1.5, beta=2.5):
+    #     """Samples from a Beta distribution skewed toward 0
+    #     alpha < beta → skew left (early cutoffs)
+    #     alpha = beta = 1 → uniform
+    #     alpha > beta → skew right (late cutoffs — not what we want)
+    #     """
+    #     r = np.random.beta(alpha, beta)
+    #     scaled = int(min_pos + r * (max_pos - min_pos))
+    #     return min(max(scaled, min_pos), max_pos)
 
     def get_inputs(self, row_d: Dict, timestep_positions: List[int]) -> dict:
         # Get latlons
@@ -109,18 +109,18 @@ class Cop4GeoDataset(WorldCerealDataset):
         # Initialize inputs
         s1, s2, meteo, dem = self.initialize_inputs()
 
-        # Determine masking position for this sample
-        if self.masking_strategy.mode == MaskingMode.FIXED:
-            mask_pos = self.masking_strategy.from_position
-        elif self.masking_strategy.mode == MaskingMode.RANDOM:
-            # Random mask position
-            assert self.masking_strategy.from_position is not None
-            max_pos = min(self.num_timesteps - 1, len(timestep_positions) - 1)
-            mask_pos = self.sample_mask_position(
-                self.masking_strategy.from_position, max_pos + 1
-            )
-        else:
-            mask_pos = None
+        # # Determine masking position for this sample
+        # if self.masking_strategy.mode == MaskingMode.FIXED:
+        #     mask_pos = self.masking_strategy.from_position
+        # elif self.masking_strategy.mode == MaskingMode.RANDOM:
+        #     # Random mask position
+        #     assert self.masking_strategy.from_position is not None
+        #     max_pos = min(self.num_timesteps - 1, len(timestep_positions) - 1)
+        #     mask_pos = self.sample_mask_position(
+        #         self.masking_strategy.from_position, max_pos + 1
+        #     )
+        # else:
+        #     mask_pos = None
 
         # Fill inputs
         for src_attr, dst_atr in self.BAND_MAPPING.items():
@@ -128,15 +128,15 @@ class Cop4GeoDataset(WorldCerealDataset):
             values = np.array([float(row_d[key]) for key in keys], dtype=np.float32)
             idx_valid = values != NODATAVALUE
 
-            if mask_pos is not None:
-                # Create in-range mask for positions >= mask_pos
-                in_range_mask = np.arange(self.num_timesteps) >= mask_pos
+            # if mask_pos is not None:
+            #     # Create in-range mask for positions >= mask_pos
+            #     in_range_mask = np.arange(self.num_timesteps) >= mask_pos
 
-                # Apply the  mask
-                values[in_range_mask] = NODATAVALUE
+            #     # Apply the  mask
+            #     values[in_range_mask] = NODATAVALUE
 
-                # Update valid indices based on the combined mask
-                idx_valid = idx_valid & ~in_range_mask
+            #     # Update valid indices based on the combined mask
+            #     idx_valid = idx_valid & ~in_range_mask
 
             if dst_atr in S2_BANDS:
                 s2[..., S2_BANDS.index(dst_atr)] = values
@@ -166,13 +166,13 @@ class Cop4GeoDataset(WorldCerealDataset):
 class Cop4GeoLabelledDataset(Cop4GeoDataset):
     def __init__(
         self,
-        dataframe,
+        dataframe: pd.DataFrame,
         task_type: Literal["binary", "multiclass"] = "binary",
         num_outputs: int = 1,
         classes_list: Union[np.ndarray, List[str]] = [],
         time_explicit: bool = False,
         augment: bool = False,
-        masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
+        # masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
         label_jitter: int = 0,  # ± timesteps to jitter true label pos, for time_explicit only
         label_window: int = 0,  # ± timesteps to expand around label pos (true or moved), for time_explicit only
         return_sample_id: bool = False,
@@ -210,7 +210,7 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             task_type=task_type,
             num_outputs=num_outputs,
             augment=augment,
-            masking_strategy=masking_strategy,
+            # masking_strategy=masking_strategy,
             **kwargs,
         )
         self.classes_list = classes_list
@@ -307,12 +307,18 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
                     seq: List[int] = valid_position.astype(int).tolist()
                 else:
                     seq = [int(x) for x in valid_position]
-                # one global jitter shift
-                if self.label_jitter > 0:
+                # Apply either jittering or label_window, but not both
+                if self.label_jitter > 0 and self.label_window > 0:
+                    apply_jitter = np.random.choice([True, False])
+                else:
+                    apply_jitter = self.label_jitter > 0
+
+                if apply_jitter:
+                    # one global jitter shift
                     shift = np.random.randint(-self.label_jitter, self.label_jitter + 1)
                     seq = [int(np.clip(p + shift, 0, T - 1)) for p in seq]
-                # one contiguous window around the min→max of seq
-                if self.label_window > 0:
+                elif self.label_window > 0:
+                    # one contiguous window around the min→max of seq
                     mn = min(seq)
                     mx = max(seq)
                     start = max(0, mn - self.label_window)
