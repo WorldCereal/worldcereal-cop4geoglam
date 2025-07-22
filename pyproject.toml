@@ -45,12 +45,12 @@ dependencies = [
     "netcdf4",  
     "numpy<2.0.0",  
     "openeo==0.35.0",  
-    "openeo-gfmap==0.4.4",  
-    "prometheo @ git+https://github.com/WorldCereal/prometheo.git@device-and-types",
+    "openeo-gfmap==0.4.6",  
+    "prometheo @ git+https://github.com/WorldCereal/prometheo.git",
     "pyarrow",  
     "pydantic==2.8.0",  
     "scipy",
-    "scikit-learn==1.5.0",
+    "scikit-learn==1.6.1",
     "torch==2.3.1",
     "tqdm",
     "worldcereal @ git+https://github.com/WorldCereal/worldcereal-classification.git@257-finetuning-with-prometheo",
@@ -77,8 +77,8 @@ addopts = [
 ]
 
 [tool.ruff]
-line-length = 88
-extend-select = ["I"]  # Enable import sorting
-
-[tool.ruff.lint]
-select = ["E", "F"]
+exclude = ["**/*.ipynb"]
+lint.extend-select = ["E", "F", "I"]
+lint.ignore = [
+  "E501"
+]

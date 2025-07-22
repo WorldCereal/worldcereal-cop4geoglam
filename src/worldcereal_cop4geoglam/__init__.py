@@ -10,9 +10,7 @@ from ._version import __version__
 # Configure loguru logger
 logger.remove()
 logger.add(
-    sys.stderr,
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    level="INFO"
+    sys.stderr, format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}", level="INFO"
 )
 
 # Make logger and version available
