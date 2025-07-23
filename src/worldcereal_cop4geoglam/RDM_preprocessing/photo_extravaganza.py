@@ -11,8 +11,8 @@ import paramiko
 from tqdm import tqdm
 
 
-path = "/data/users/Public/koendevos/Copernicus4GEOGLAM/Moldova/" #Change this to the worldcereal path
-crop_points_file = "mda_results_2025.gpkg"
+path = "/data/users/Public/koendevos/Copernicus4GEOGLAM/Mozambique/" #Change this to the worldcereal path
+crop_points_file = "moz_results_2025.gpkg"
 activation = crop_points_file.replace(".gpkg", "")
 
 ## Terrasphere host
@@ -20,7 +20,10 @@ activation = crop_points_file.replace(".gpkg", "")
 hostname = "81.169.253.229"
 port = 22
 username = f"{activation[0:3]}_user"
-password = f"pwd4G30Gl4m@{activation[0:3].upper()}"
+if activation == "moz_results_2025":
+    password = f"pwd4G30Gl4m@MZ"
+elif activation == "mda_results_2025":
+    password = f"pwd4G30Gl4m@{activation[0:3].upper()}"
 
 # Create an SSH client
 client = paramiko.SSHClient()
@@ -62,6 +65,10 @@ for i, row in croptype_points.iterrows():
         mixed_dominant_detail.append(row["detail_photo_of_field"])
         mixed_dominant_photos_overview.append(row["overview_photo_of_field"])
         mixed_dominant_photos_label.append(row["croptype"])
+    elif " " in croptype:
+        no_dominant_photos_detail.append(row["detail_photo_of_field"])
+        no_dominant_photos_overview.append(row["overview_photo_of_field"])
+        no_dominant_photos_detail_label.append(row["croptype"])
     else:
         continue
 
