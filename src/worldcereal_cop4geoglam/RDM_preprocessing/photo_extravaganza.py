@@ -10,7 +10,6 @@ import geopandas as gpd
 import paramiko
 from tqdm import tqdm
 
-
 path = "/data/users/Public/koendevos/Copernicus4GEOGLAM/Mozambique/" #Change this to the worldcereal path
 crop_points_file = "moz_results_2025.gpkg"
 activation = crop_points_file.replace(".gpkg", "")

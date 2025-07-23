@@ -12,6 +12,7 @@ from json import dumps, load
 
 import pandas as pd
 
+
 def getLevel(row):
     # Check for the most detailed level (from level_5 to level_1)
     if pd.notna(row["level_5"]):
