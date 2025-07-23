@@ -8,9 +8,9 @@ Also make sure to remove all options that are not used in the actual mapping.
 '''
 
 import os
-import pandas as pd
-import numpy as np
 from json import dumps, load
+
+import pandas as pd
 
 def getLevel(row):
     # Check for the most detailed level (from level_5 to level_1)
@@ -41,7 +41,7 @@ def CROPTYPE_EWOC(joined,crop_dict):
     for i, row in joined.iterrows():
         croptype_ewoc = row["ewoc"]
         crop_key = findKey(crop_dict, row["Label"])
-        if not crop_key is None:
+        if crop_key is not None:
             CROPTYPE_EWOC_dict[str(croptype_ewoc)] = crop_key
 
     #Sort dict on keys

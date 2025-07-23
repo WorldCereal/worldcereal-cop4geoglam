@@ -8,9 +8,9 @@ Also make sure to remove all options that are not used in the actual mapping.
 '''
 
 import os
-import pandas as pd
-import numpy as np
 from json import dumps, load
+
+import pandas as pd
 
 def getLevel(row):
     # Check for the most detailed level (from level_5 to level_1)

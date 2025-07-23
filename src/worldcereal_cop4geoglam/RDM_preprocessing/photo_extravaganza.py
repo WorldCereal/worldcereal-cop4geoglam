@@ -4,10 +4,10 @@ for visual reference
 '''
 
 import os
+
 import fiona
 import geopandas as gpd
 import paramiko
-
 from tqdm import tqdm
 
 
@@ -21,7 +21,7 @@ hostname = "81.169.253.229"
 port = 22
 username = f"{activation[0:3]}_user"
 if activation == "moz_results_2025":
-    password = f"pwd4G30Gl4m@MZ"
+    password = "pwd4G30Gl4m@MZ"
 elif activation == "mda_results_2025":
     password = f"pwd4G30Gl4m@{activation[0:3].upper()}"
 

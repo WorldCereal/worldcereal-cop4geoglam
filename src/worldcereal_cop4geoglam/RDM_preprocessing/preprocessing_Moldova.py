@@ -6,11 +6,10 @@ Script used to preprocess the data for Moldova before uploading to the RDM.
 
 #Loading the necessary libraries
 import os
-import fiona
-
-import geopandas as gpd
-
 from datetime import datetime
+
+import fiona
+import geopandas as gpd
 
 # Define the path to the directory containing the files
 path = "/data/users/Public/koendevos/Copernicus4GEOGLAM/Moldova/" #Change this to the worldcereal path
