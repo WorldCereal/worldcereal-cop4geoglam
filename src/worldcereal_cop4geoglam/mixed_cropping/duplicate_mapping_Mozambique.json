@@ -1,0 +1,2463 @@
+{
+    "DUPLICATE_CROPTYPE_ORIGINAL": {
+        "banana banana cassave cowpeas mangos oranges rice": [
+            "cowpeas",
+            "oranges",
+            "banana",
+            "mangos",
+            "rice",
+            "cassave"
+        ],
+        "banana cassave mangos sweet_potatoes rice": [
+            "sweet_potatoes",
+            "banana",
+            "mangos",
+            "rice",
+            "cassave"
+        ],
+        "banana pigeon_pea sugarcane sorghum sweet_potatoes": [
+            "sorghum",
+            "sweet_potatoes",
+            "banana",
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "banana sugarcane": [
+            "sugarcane",
+            "banana"
+        ],
+        "banana sugarcane rice cassave banana mangos sweet_potatoes": [
+            "sweet_potatoes",
+            "banana",
+            "mangos",
+            "sugarcane",
+            "rice",
+            "cassave"
+        ],
+        "beans cassave": [
+            "cassave",
+            "beans"
+        ],
+        "cassave pigeon_pea": [
+            "cassave",
+            "pigeon_pea"
+        ],
+        "cassave rice": [
+            "rice",
+            "cassave"
+        ],
+        "cassave sesame": [
+            "cassave",
+            "sesame"
+        ],
+        "cassave sesame sweet_potatoes": [
+            "cassave",
+            "sesame",
+            "sweet_potatoes"
+        ],
+        "cassave sunflower sweet_potatoes": [
+            "sunflower",
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "cassave sweet_potatoes": [
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "lemon sweet_potatoes": [
+            "lemon",
+            "sweet_potatoes"
+        ],
+        "maize banana pigeon_pea sugarcane banana cassave mangos sesame cowpeas": [
+            "cowpeas",
+            "maize",
+            "sesame",
+            "banana",
+            "mangos",
+            "pigeon_pea",
+            "sugarcane",
+            "cassave"
+        ],
+        "maize banana sugarcane sesame": [
+            "sugarcane",
+            "maize",
+            "sesame",
+            "banana"
+        ],
+        "maize beans": [
+            "maize",
+            "beans"
+        ],
+        "maize cassave": [
+            "cassave",
+            "maize"
+        ],
+        "maize cassave cowpeas mangos sweet_potatoes cashew": [
+            "sweet_potatoes",
+            "cowpeas",
+            "maize",
+            "mangos",
+            "cashew",
+            "cassave"
+        ],
+        "maize cowpeas cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "cowpeas",
+            "maize"
+        ],
+        "maize cowpeas sesame": [
+            "cowpeas",
+            "maize",
+            "sesame"
+        ],
+        "maize ginger": [
+            "ginger",
+            "maize"
+        ],
+        "maize millet pigeon_pea cassave": [
+            "pigeon_pea",
+            "millet",
+            "cassave",
+            "maize"
+        ],
+        "maize pigeon_pea": [
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea banana rice banana": [
+            "rice",
+            "pigeon_pea",
+            "maize",
+            "banana"
+        ],
+        "maize pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea cassave sesame": [
+            "cassave",
+            "pigeon_pea",
+            "maize",
+            "sesame"
+        ],
+        "maize pigeon_pea cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea cowpeas": [
+            "cowpeas",
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea cowpeas sorghum okra sesame": [
+            "sorghum",
+            "cowpeas",
+            "maize",
+            "sesame",
+            "pigeon_pea",
+            "okra"
+        ],
+        "maize pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea sugarcane": [
+            "pigeon_pea",
+            "sugarcane",
+            "maize"
+        ],
+        "maize rice groundnuts": [
+            "rice",
+            "groundnuts",
+            "maize"
+        ],
+        "maize sesame": [
+            "maize",
+            "sesame"
+        ],
+        "maize sugarcane banana cassave melancia": [
+            "melancia",
+            "maize",
+            "banana",
+            "sugarcane",
+            "cassave"
+        ],
+        "maize sugarcane pigeon_pea banana": [
+            "pigeon_pea",
+            "sugarcane",
+            "maize",
+            "banana"
+        ],
+        "maize sugarcane rice": [
+            "rice",
+            "sugarcane",
+            "maize"
+        ],
+        "maize sunflower": [
+            "sunflower",
+            "maize"
+        ],
+        "maize sweet_potatoes": [
+            "maize",
+            "sweet_potatoes"
+        ],
+        "onion tomatoes collard maize": [
+            "collard",
+            "maize",
+            "onion",
+            "tomatoes"
+        ],
+        "pigeon_pea banana": [
+            "pigeon_pea",
+            "banana"
+        ],
+        "pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea"
+        ],
+        "pigeon_pea cassave millet": [
+            "millet",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "pigeon_pea cassave sunflower": [
+            "sunflower",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "pigeon_pea cassave sunflower sweet_potatoes": [
+            "sunflower",
+            "cassave",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "pigeon_pea nhewe": [
+            "nhewe",
+            "pigeon_pea"
+        ],
+        "pigeon_pea rice": [
+            "rice",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sesame": [
+            "pigeon_pea",
+            "sesame"
+        ],
+        "pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sorghum cassave": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sorghum sunflower": [
+            "sorghum",
+            "pigeon_pea",
+            "sunflower"
+        ],
+        "pigeon_pea soya_beans": [
+            "pigeon_pea",
+            "soya_beans"
+        ],
+        "pigeon_pea sugarcane": [
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sugarcane banana banana rice": [
+            "rice",
+            "sugarcane",
+            "pigeon_pea",
+            "banana"
+        ],
+        "pigeon_pea sugarcane banana maize": [
+            "sugarcane",
+            "maize",
+            "pigeon_pea",
+            "banana"
+        ],
+        "pigeon_pea sugarcane sweet_potatoes yam sunflower banana cassave": [
+            "sunflower",
+            "yam",
+            "sweet_potatoes",
+            "banana",
+            "sugarcane",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "pigeon_pea sunflower": [
+            "sunflower",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sunflower sweet_potatoes groundnuts": [
+            "sunflower",
+            "groundnuts",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "pigeon_pea tabaco": [
+            "tabaco",
+            "pigeon_pea"
+        ],
+        "pineapple rice": [
+            "rice",
+            "pineapple"
+        ],
+        "rice cassave": [
+            "rice",
+            "cassave"
+        ],
+        "rice cassave cowpeas cashew": [
+            "rice",
+            "cowpeas",
+            "cassave",
+            "cashew"
+        ],
+        "rice sweet_potatoes": [
+            "rice",
+            "sweet_potatoes"
+        ],
+        "sesame cassave": [
+            "cassave",
+            "sesame"
+        ],
+        "sugarcane banana": [
+            "sugarcane",
+            "banana"
+        ],
+        "sugarcane banana banana collard cassave": [
+            "cassave",
+            "collard",
+            "sugarcane",
+            "banana"
+        ],
+        "sugarcane banana cassave mangos rice": [
+            "banana",
+            "mangos",
+            "sugarcane",
+            "rice",
+            "cassave"
+        ],
+        "sugarcane banana pigeon_pea cassave rice cashew": [
+            "banana",
+            "pigeon_pea",
+            "sugarcane",
+            "cashew",
+            "rice",
+            "cassave"
+        ],
+        "sugarcane cassave": [
+            "cassave",
+            "sugarcane"
+        ],
+        "sugarcane cassave pawpaw mangos sweet_potatoes": [
+            "sweet_potatoes",
+            "pawpaw",
+            "mangos",
+            "sugarcane",
+            "cassave"
+        ],
+        "sugarcane collard": [
+            "collard",
+            "sugarcane"
+        ],
+        "sugarcane collard tomatoes": [
+            "collard",
+            "sugarcane",
+            "tomatoes"
+        ],
+        "sugarcane maize sorghum": [
+            "sorghum",
+            "maize",
+            "sugarcane"
+        ],
+        "sugarcane rice": [
+            "rice",
+            "sugarcane"
+        ],
+        "sugarcane rice sweet_potatoes": [
+            "rice",
+            "sugarcane",
+            "sweet_potatoes"
+        ],
+        "sunflower cowpeas": [
+            "sunflower",
+            "cowpeas"
+        ],
+        "sunflower sweet_potatoes cassave": [
+            "sunflower",
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "sweet_potatoes sunflower": [
+            "sunflower",
+            "sweet_potatoes"
+        ],
+        "yes_cassave banana": [
+            "cassave",
+            "banana"
+        ],
+        "yes_cassave banana banana": [
+            "cassave",
+            "banana"
+        ],
+        "yes_cassave banana banana cassave": [
+            "cassave",
+            "banana"
+        ],
+        "yes_cassave banana pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_cassave banana pigeon_pea cassave sweet_potatoes": [
+            "sweet_potatoes",
+            "cassave",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_cassave beans": [
+            "cassave",
+            "beans"
+        ],
+        "yes_cassave cassave cowpeas": [
+            "cowpeas",
+            "cassave"
+        ],
+        "yes_cassave cassave green_grams": [
+            "cassave",
+            "green_grams"
+        ],
+        "yes_cassave cassave rice": [
+            "rice",
+            "cassave"
+        ],
+        "yes_cassave cassave sorghum": [
+            "sorghum",
+            "cassave"
+        ],
+        "yes_cassave cassave sorghum sesame": [
+            "sorghum",
+            "cassave",
+            "sesame"
+        ],
+        "yes_cassave cassave sweet_potatoes": [
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "yes_cassave cassave sweet_potatoes okra": [
+            "okra",
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "yes_cassave cowpeas": [
+            "cowpeas",
+            "cassave"
+        ],
+        "yes_cassave cowpeas cassave": [
+            "cowpeas",
+            "cassave"
+        ],
+        "yes_cassave cowpeas cassave groundnuts": [
+            "cowpeas",
+            "cassave",
+            "groundnuts"
+        ],
+        "yes_cassave cowpeas yoke_beans": [
+            "cowpeas",
+            "cassave",
+            "yoke_beans"
+        ],
+        "yes_cassave groundnuts": [
+            "cassave",
+            "groundnuts"
+        ],
+        "yes_cassave maize": [
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize cassave": [
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize cassave cowpeas": [
+            "cowpeas",
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize cassave sweet_potatoes": [
+            "cassave",
+            "maize",
+            "sweet_potatoes"
+        ],
+        "yes_cassave maize cowpeas": [
+            "cowpeas",
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize pigeon_pea": [
+            "pigeon_pea",
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize pigeon_pea cassave cowpeas": [
+            "pigeon_pea",
+            "cassave",
+            "maize",
+            "cowpeas"
+        ],
+        "yes_cassave maize pigeon_pea cassave cowpeas pumpkin sesame": [
+            "pumpkin",
+            "cowpeas",
+            "maize",
+            "sesame",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_cassave maize pigeon_pea cassave sesame": [
+            "pigeon_pea",
+            "cassave",
+            "maize",
+            "sesame"
+        ],
+        "yes_cassave maize pigeon_pea cassave sorghum": [
+            "sorghum",
+            "pigeon_pea",
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea",
+            "cassave",
+            "maize"
+        ],
+        "yes_cassave maize pigeon_pea sugarcane cassave": [
+            "pigeon_pea",
+            "cassave",
+            "sugarcane",
+            "maize"
+        ],
+        "yes_cassave maize sugarcane cassave sorghum sweet_potatoes": [
+            "sorghum",
+            "sweet_potatoes",
+            "maize",
+            "sugarcane",
+            "cassave"
+        ],
+        "yes_cassave maize sugarcane pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassave",
+            "sugarcane",
+            "maize"
+        ],
+        "yes_cassave maize yoke_beans": [
+            "cassave",
+            "yoke_beans",
+            "maize"
+        ],
+        "yes_cassave millet": [
+            "millet",
+            "cassave"
+        ],
+        "yes_cassave pigeon_pea": [
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea banana sugarcane cassave banana sorghum": [
+            "sorghum",
+            "banana",
+            "sugarcane",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_cassave pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea cassave cowpeas": [
+            "cowpeas",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea cassave cowpeas sweet_potatoes": [
+            "cowpeas",
+            "cassave",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_cassave pigeon_pea cassave pawpaw": [
+            "cassave",
+            "pigeon_pea",
+            "pawpaw"
+        ],
+        "yes_cassave pigeon_pea cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea cassave sweet_potatoes": [
+            "cassave",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_cassave pigeon_pea cassave yam": [
+            "cassave",
+            "pigeon_pea",
+            "yam"
+        ],
+        "yes_cassave pigeon_pea cowpeas": [
+            "cowpeas",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea maize cassave": [
+            "cassave",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea sugarcane": [
+            "cassave",
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea sugarcane cassave rice": [
+            "rice",
+            "cassave",
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea sweet_potatoes": [
+            "cassave",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_cassave pigeon_pea yoke_beans": [
+            "cassave",
+            "yoke_beans",
+            "pigeon_pea"
+        ],
+        "yes_cassave pumpkin": [
+            "cassave",
+            "pumpkin"
+        ],
+        "yes_cassave sesame": [
+            "cassave",
+            "sesame"
+        ],
+        "yes_cassave sorghum": [
+            "sorghum",
+            "cassave"
+        ],
+        "yes_cassave sorghum cassave": [
+            "sorghum",
+            "cassave"
+        ],
+        "yes_cassave sugarcane cassave": [
+            "cassave",
+            "sugarcane"
+        ],
+        "yes_cassave sugarcane pigeon_pea": [
+            "pigeon_pea",
+            "cassave",
+            "sugarcane"
+        ],
+        "yes_cassave sugarcane pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassave",
+            "sugarcane"
+        ],
+        "yes_cassave sugarcane pigeon_pea cassave rice": [
+            "rice",
+            "pigeon_pea",
+            "cassave",
+            "sugarcane"
+        ],
+        "yes_cassave sweet_potatoes": [
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "yes_cassave sweet_potatoes sorghum": [
+            "sorghum",
+            "cassave",
+            "sweet_potatoes"
+        ],
+        "yes_cowpeas cassave": [
+            "cassave",
+            "cowpeas"
+        ],
+        "yes_cowpeas maize cassave cowpeas": [
+            "cassave",
+            "cowpeas",
+            "maize"
+        ],
+        "yes_cowpeas sorghum": [
+            "sorghum",
+            "cowpeas"
+        ],
+        "yes_maize banana cassave oranges": [
+            "cassave",
+            "oranges",
+            "maize",
+            "banana"
+        ],
+        "yes_maize cassave": [
+            "cassave",
+            "maize"
+        ],
+        "yes_maize cowpeas": [
+            "cowpeas",
+            "maize"
+        ],
+        "yes_maize maize beans": [
+            "maize",
+            "beans"
+        ],
+        "yes_maize maize cassave": [
+            "cassave",
+            "maize"
+        ],
+        "yes_maize maize cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "maize"
+        ],
+        "yes_maize maize cowpeas okra": [
+            "okra",
+            "cowpeas",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea": [
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea cowpeas": [
+            "cowpeas",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea rice": [
+            "rice",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea sweet_potatoes": [
+            "pigeon_pea",
+            "maize",
+            "sweet_potatoes"
+        ],
+        "yes_maize maize sesame": [
+            "maize",
+            "sesame"
+        ],
+        "yes_maize maize sorghum": [
+            "sorghum",
+            "maize"
+        ],
+        "yes_maize maize sweet_potatoes sesame": [
+            "maize",
+            "sesame",
+            "sweet_potatoes"
+        ],
+        "yes_maize pigeon_pea": [
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize pumpkin": [
+            "pumpkin",
+            "maize"
+        ],
+        "yes_maize rice": [
+            "rice",
+            "maize"
+        ],
+        "yes_maize sugarcane cassave": [
+            "cassave",
+            "sugarcane",
+            "maize"
+        ],
+        "yes_maize sugarcane maize beans": [
+            "sugarcane",
+            "maize",
+            "beans"
+        ],
+        "yes_millet millet pigeon_pea": [
+            "millet",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea amendoim": [
+            "amendoim",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea banana": [
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea banana pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea banana pigeon_pea maize banana cowpeas": [
+            "cowpeas",
+            "maize",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea banana sorghum": [
+            "sorghum",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea cassave sweet_potatoes pumpkin cowpeas": [
+            "pumpkin",
+            "sweet_potatoes",
+            "cowpeas",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_pigeon_pea cowpeas": [
+            "cowpeas",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize": [
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize cassave": [
+            "cassave",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize millet pigeon_pea cassave": [
+            "cassave",
+            "millet",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea": [
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea banana": [
+            "maize",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea maize pigeon_pea banana sugarcane sorghum sunflower cassave": [
+            "sorghum",
+            "sunflower",
+            "maize",
+            "banana",
+            "sugarcane",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cassave": [
+            "cassave",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cassave banana sorghum": [
+            "sorghum",
+            "maize",
+            "banana",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cassave cowpeas sunflower": [
+            "sunflower",
+            "cowpeas",
+            "maize",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cowpeas": [
+            "cowpeas",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cowpeas cassave": [
+            "cassave",
+            "cowpeas",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea millet": [
+            "millet",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea rice": [
+            "rice",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sesame": [
+            "maize",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sesame sorghum": [
+            "sorghum",
+            "maize",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sorghum": [
+            "sorghum",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea soya_beans": [
+            "maize",
+            "pigeon_pea",
+            "soya_beans"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sugarcane banana cassave": [
+            "maize",
+            "banana",
+            "sugarcane",
+            "pigeon_pea",
+            "cassave"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sweet_potatoes cassave": [
+            "cassave",
+            "maize",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_pigeon_pea maize sesame": [
+            "maize",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea maize sorghum": [
+            "sorghum",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize soya_beans": [
+            "maize",
+            "pigeon_pea",
+            "soya_beans"
+        ],
+        "yes_pigeon_pea maize sugarcane": [
+            "sugarcane",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize sunflower": [
+            "sunflower",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize sweet_potatoes": [
+            "maize",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_pigeon_pea millet": [
+            "millet",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea millet maize pigeon_pea": [
+            "millet",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea millet pigeon_pea": [
+            "millet",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea": [
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea banana cassave": [
+            "cassave",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea pigeon_pea banana cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea pigeon_pea beans sesame mangos": [
+            "mangos",
+            "pigeon_pea",
+            "sesame",
+            "beans"
+        ],
+        "yes_pigeon_pea pigeon_pea cashew sweet_potatoes mangos cassave custard_apple": [
+            "sweet_potatoes",
+            "custard_apple",
+            "mangos",
+            "pigeon_pea",
+            "cashew",
+            "cassave"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave": [
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave green_grams": [
+            "cassave",
+            "green_grams",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave green_grams sweet_potatoes": [
+            "cassave",
+            "green_grams",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave pawpaw okra": [
+            "okra",
+            "cassave",
+            "pigeon_pea",
+            "pawpaw"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sesame": [
+            "cassave",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sorghum okra": [
+            "okra",
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sorghum sweet_potatoes": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sweet_potatoes": [
+            "cassave",
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_pigeon_pea pigeon_pea cowpeas cassave": [
+            "cassave",
+            "cowpeas",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize": [
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize banana cassave": [
+            "cassave",
+            "maize",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea pigeon_pea maize cowpeas": [
+            "cowpeas",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize sorghum": [
+            "sorghum",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize sorghum soya_beans": [
+            "sorghum",
+            "maize",
+            "pigeon_pea",
+            "soya_beans"
+        ],
+        "yes_pigeon_pea pigeon_pea maize soya_beans": [
+            "maize",
+            "pigeon_pea",
+            "soya_beans"
+        ],
+        "yes_pigeon_pea pigeon_pea maize sunflower": [
+            "sunflower",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea pumpkin sesame": [
+            "pumpkin",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea pigeon_pea sesame": [
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum beans": [
+            "sorghum",
+            "pigeon_pea",
+            "beans"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum broad_beans": [
+            "sorghum",
+            "broad_beans",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum cassave": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum yoke_beans cassave": [
+            "sorghum",
+            "cassave",
+            "yoke_beans",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea soya_beans": [
+            "pigeon_pea",
+            "soya_beans"
+        ],
+        "yes_pigeon_pea pigeon_pea sunflower": [
+            "sunflower",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sunflower broad_beans": [
+            "sunflower",
+            "broad_beans",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sunflower sorghum": [
+            "sorghum",
+            "sunflower",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sweet_potatoes": [
+            "pigeon_pea",
+            "sweet_potatoes"
+        ],
+        "yes_pigeon_pea sesame": [
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sugarcane": [
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sugarcane banana": [
+            "sugarcane",
+            "pigeon_pea",
+            "banana"
+        ],
+        "yes_pigeon_pea sugarcane pigeon_pea": [
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sunflower": [
+            "sunflower",
+            "pigeon_pea"
+        ],
+        "yes_sorghum maize pigeon_pea": [
+            "sorghum",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_sorghum pigeon_pea": [
+            "sorghum",
+            "pigeon_pea"
+        ],
+        "yes_sorghum pigeon_pea cassave sorghum": [
+            "sorghum",
+            "cassave",
+            "pigeon_pea"
+        ],
+        "yes_sorghum pigeon_pea sorghum": [
+            "sorghum",
+            "pigeon_pea"
+        ],
+        "yes_sorghum pigeon_pea sunflower": [
+            "sorghum",
+            "pigeon_pea",
+            "sunflower"
+        ],
+        "yes_yoke_beans cassave": [
+            "cassave",
+            "yoke_beans"
+        ],
+        "yes_yoke_beans maize potatoes cassave pumpkin": [
+            "yoke_beans",
+            "pumpkin",
+            "potatoes",
+            "maize",
+            "cassave"
+        ],
+        "yes_yoke_beans sugarcane tomatoes rice": [
+            "rice",
+            "yoke_beans",
+            "sugarcane",
+            "tomatoes"
+        ],
+        "yoke_beans cassave": [
+            "cassave",
+            "yoke_beans"
+        ]
+    },
+    "DUPLICATE_CROPTYPE_FINAL": {
+        "banana banana cassave cowpeas mangos oranges rice": [
+            "cowpea",
+            "other_crops",
+            "rice",
+            "cassava"
+        ],
+        "banana cassave mangos sweet_potatoes rice": [
+            "rice",
+            "other_crops",
+            "sweet_potato",
+            "cassava"
+        ],
+        "banana pigeon_pea sugarcane sorghum sweet_potatoes": [
+            "other_crops",
+            "sugarcane",
+            "pigeon_pea",
+            "sweet_potato"
+        ],
+        "banana sugarcane": [
+            "other_crops",
+            "sugarcane"
+        ],
+        "banana sugarcane rice cassave banana mangos sweet_potatoes": [
+            "sweet_potato",
+            "cassava",
+            "sugarcane",
+            "rice",
+            "other_crops"
+        ],
+        "beans cassave": [
+            "other_crops",
+            "cassava"
+        ],
+        "cassave pigeon_pea": [
+            "pigeon_pea",
+            "cassava"
+        ],
+        "cassave rice": [
+            "rice",
+            "cassava"
+        ],
+        "cassave sesame": [
+            "sesame",
+            "cassava"
+        ],
+        "cassave sesame sweet_potatoes": [
+            "sweet_potato",
+            "sesame",
+            "cassava"
+        ],
+        "cassave sunflower sweet_potatoes": [
+            "other_crops",
+            "sweet_potato",
+            "cassava"
+        ],
+        "cassave sweet_potatoes": [
+            "sweet_potato",
+            "cassava"
+        ],
+        "lemon sweet_potatoes": [
+            "other_crops",
+            "sweet_potato"
+        ],
+        "maize banana pigeon_pea sugarcane banana cassave mangos sesame cowpeas": [
+            "cowpea",
+            "maize",
+            "sesame",
+            "cassava",
+            "pigeon_pea",
+            "sugarcane",
+            "other_crops"
+        ],
+        "maize banana sugarcane sesame": [
+            "other_crops",
+            "sugarcane",
+            "maize",
+            "sesame"
+        ],
+        "maize beans": [
+            "other_crops",
+            "maize"
+        ],
+        "maize cassave": [
+            "maize",
+            "cassava"
+        ],
+        "maize cassave cowpeas mangos sweet_potatoes cashew": [
+            "cowpea",
+            "sweet_potato",
+            "maize",
+            "cassava",
+            "other_crops"
+        ],
+        "maize cowpeas cassave sorghum": [
+            "cowpea",
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "maize cowpeas sesame": [
+            "cowpea",
+            "maize",
+            "sesame"
+        ],
+        "maize ginger": [
+            "other_crops",
+            "maize"
+        ],
+        "maize millet pigeon_pea cassave": [
+            "pigeon_pea",
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "maize pigeon_pea": [
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea banana rice banana": [
+            "rice",
+            "pigeon_pea",
+            "other_crops",
+            "maize"
+        ],
+        "maize pigeon_pea cassave": [
+            "pigeon_pea",
+            "maize",
+            "cassava"
+        ],
+        "maize pigeon_pea cassave sesame": [
+            "maize",
+            "sesame",
+            "cassava",
+            "pigeon_pea"
+        ],
+        "maize pigeon_pea cassave sorghum": [
+            "pigeon_pea",
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "maize pigeon_pea cowpeas": [
+            "cowpea",
+            "pigeon_pea",
+            "maize"
+        ],
+        "maize pigeon_pea cowpeas sorghum okra sesame": [
+            "cowpea",
+            "maize",
+            "sesame",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "maize pigeon_pea sorghum": [
+            "pigeon_pea",
+            "other_crops",
+            "maize"
+        ],
+        "maize pigeon_pea sugarcane": [
+            "pigeon_pea",
+            "sugarcane",
+            "maize"
+        ],
+        "maize rice groundnuts": [
+            "rice",
+            "other_crops",
+            "maize"
+        ],
+        "maize sesame": [
+            "maize",
+            "sesame"
+        ],
+        "maize sugarcane banana cassave melancia": [
+            "other_crops",
+            "sugarcane",
+            "maize",
+            "cassava"
+        ],
+        "maize sugarcane pigeon_pea banana": [
+            "pigeon_pea",
+            "other_crops",
+            "sugarcane",
+            "maize"
+        ],
+        "maize sugarcane rice": [
+            "rice",
+            "sugarcane",
+            "maize"
+        ],
+        "maize sunflower": [
+            "other_crops",
+            "maize"
+        ],
+        "maize sweet_potatoes": [
+            "maize",
+            "sweet_potato"
+        ],
+        "onion tomatoes": [
+            "other_crops"
+        ],
+        "onion tomatoes collard maize": [
+            "other_crops",
+            "maize"
+        ],
+        "pigeon_pea banana": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassava"
+        ],
+        "pigeon_pea cassave millet": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "pigeon_pea cassave sunflower": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "pigeon_pea cassave sunflower sweet_potatoes": [
+            "other_crops",
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "pigeon_pea nhewe": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pigeon_pea rice": [
+            "rice",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sesame": [
+            "pigeon_pea",
+            "sesame"
+        ],
+        "pigeon_pea sorghum": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sorghum cassave": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "pigeon_pea sorghum sunflower": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pigeon_pea soya_beans": [
+            "soybean",
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sugarcane": [
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sugarcane banana banana rice": [
+            "rice",
+            "other_crops",
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sugarcane banana maize": [
+            "other_crops",
+            "sugarcane",
+            "maize",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sugarcane sweet_potatoes yam sunflower banana cassave": [
+            "sweet_potato",
+            "cassava",
+            "sugarcane",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "pigeon_pea sunflower": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pigeon_pea sunflower sweet_potatoes groundnuts": [
+            "other_crops",
+            "pigeon_pea",
+            "sweet_potato"
+        ],
+        "pigeon_pea tabaco": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "pineapple rice": [
+            "rice",
+            "other_crops"
+        ],
+        "rice cassave": [
+            "rice",
+            "cassava"
+        ],
+        "rice cassave cowpeas cashew": [
+            "rice",
+            "cowpea",
+            "other_crops",
+            "cassava"
+        ],
+        "rice sweet_potatoes": [
+            "rice",
+            "sweet_potato"
+        ],
+        "sesame cassave": [
+            "sesame",
+            "cassava"
+        ],
+        "sugarcane banana": [
+            "other_crops",
+            "sugarcane"
+        ],
+        "sugarcane banana banana collard cassave": [
+            "other_crops",
+            "sugarcane",
+            "cassava"
+        ],
+        "sugarcane banana cassave mangos rice": [
+            "rice",
+            "other_crops",
+            "sugarcane",
+            "cassava"
+        ],
+        "sugarcane banana pigeon_pea cassave rice cashew": [
+            "cassava",
+            "pigeon_pea",
+            "sugarcane",
+            "rice",
+            "other_crops"
+        ],
+        "sugarcane cassave": [
+            "sugarcane",
+            "cassava"
+        ],
+        "sugarcane cassave pawpaw mangos sweet_potatoes": [
+            "other_crops",
+            "sugarcane",
+            "sweet_potato",
+            "cassava"
+        ],
+        "sugarcane collard": [
+            "other_crops",
+            "sugarcane"
+        ],
+        "sugarcane collard tomatoes": [
+            "other_crops",
+            "sugarcane"
+        ],
+        "sugarcane maize sorghum": [
+            "other_crops",
+            "maize",
+            "sugarcane"
+        ],
+        "sugarcane rice": [
+            "rice",
+            "sugarcane"
+        ],
+        "sugarcane rice sweet_potatoes": [
+            "rice",
+            "sugarcane",
+            "sweet_potato"
+        ],
+        "sunflower cowpeas": [
+            "cowpea",
+            "other_crops"
+        ],
+        "sunflower sweet_potatoes cassave": [
+            "other_crops",
+            "sweet_potato",
+            "cassava"
+        ],
+        "sweet_potatoes sunflower": [
+            "other_crops",
+            "sweet_potato"
+        ],
+        "yes_cassave banana": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave banana banana": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave banana banana cassave": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave banana pigeon_pea cassave": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave banana pigeon_pea cassave sweet_potatoes": [
+            "other_crops",
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave beans": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave cassave cowpeas": [
+            "cowpea",
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave cassave green_grams": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave cassave rice": [
+            "rice",
+            "cassava"
+        ],
+        "yes_cassave cassave sorghum": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave cassave sorghum sesame": [
+            "other_crops",
+            "sesame",
+            "cassava"
+        ],
+        "yes_cassave cassave sweet_potatoes": [
+            "other_crops",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave cassave sweet_potatoes okra": [
+            "other_crops",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave cowpeas": [
+            "cowpea",
+            "cassava"
+        ],
+        "yes_cassave cowpeas cassave": [
+            "cowpea",
+            "cassava"
+        ],
+        "yes_cassave cowpeas cassave groundnuts": [
+            "cowpea",
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave cowpeas yoke_beans": [
+            "cowpea",
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave groundnuts": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave maize": [
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize cassave": [
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize cassave cowpeas": [
+            "cowpea",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize cassave sweet_potatoes": [
+            "maize",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave maize cowpeas": [
+            "cowpea",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize pigeon_pea": [
+            "pigeon_pea",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize pigeon_pea cassave": [
+            "pigeon_pea",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize pigeon_pea cassave cowpeas": [
+            "cowpea",
+            "maize",
+            "cassava",
+            "pigeon_pea"
+        ],
+        "yes_cassave maize pigeon_pea cassave cowpeas pumpkin sesame": [
+            "cowpea",
+            "maize",
+            "sesame",
+            "cassava",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "yes_cassave maize pigeon_pea cassave sesame": [
+            "maize",
+            "sesame",
+            "cassava",
+            "pigeon_pea"
+        ],
+        "yes_cassave maize pigeon_pea cassave sorghum": [
+            "pigeon_pea",
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize pigeon_pea sorghum": [
+            "pigeon_pea",
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave maize pigeon_pea sugarcane cassave": [
+            "maize",
+            "cassava",
+            "pigeon_pea",
+            "sugarcane",
+            "other_crops"
+        ],
+        "yes_cassave maize sugarcane cassave sorghum sweet_potatoes": [
+            "sweet_potato",
+            "maize",
+            "cassava",
+            "sugarcane",
+            "other_crops"
+        ],
+        "yes_cassave maize sugarcane pigeon_pea cassave": [
+            "maize",
+            "cassava",
+            "pigeon_pea",
+            "sugarcane"
+        ],
+        "yes_cassave maize yoke_beans": [
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "yes_cassave millet": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea": [
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea banana sugarcane cassave banana sorghum": [
+            "other_crops",
+            "sugarcane",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cassave cowpeas": [
+            "cowpea",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cassave cowpeas sweet_potatoes": [
+            "cowpea",
+            "sweet_potato",
+            "cassava",
+            "pigeon_pea"
+        ],
+        "yes_cassave pigeon_pea cassave pawpaw": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cassave sorghum": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cassave sweet_potatoes": [
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cassave yam": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea cowpeas": [
+            "cowpea",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea maize cassave": [
+            "maize",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea sugarcane": [
+            "sugarcane",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea sugarcane cassave rice": [
+            "cassava",
+            "sugarcane",
+            "pigeon_pea",
+            "rice"
+        ],
+        "yes_cassave pigeon_pea sweet_potatoes": [
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave pigeon_pea yoke_beans": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_cassave pumpkin": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave sesame": [
+            "sesame",
+            "cassava"
+        ],
+        "yes_cassave sorghum": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave sorghum cassave": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_cassave sugarcane cassave": [
+            "sugarcane",
+            "cassava"
+        ],
+        "yes_cassave sugarcane pigeon_pea": [
+            "pigeon_pea",
+            "sugarcane",
+            "cassava"
+        ],
+        "yes_cassave sugarcane pigeon_pea cassave": [
+            "pigeon_pea",
+            "sugarcane",
+            "cassava"
+        ],
+        "yes_cassave sugarcane pigeon_pea cassave rice": [
+            "cassava",
+            "pigeon_pea",
+            "sugarcane",
+            "rice"
+        ],
+        "yes_cassave sweet_potatoes": [
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cassave sweet_potatoes sorghum": [
+            "other_crops",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_cowpeas cassave": [
+            "cowpea",
+            "cassava"
+        ],
+        "yes_cowpeas maize cassave cowpeas": [
+            "cowpea",
+            "maize",
+            "cassava"
+        ],
+        "yes_cowpeas sorghum": [
+            "cowpea",
+            "other_crops"
+        ],
+        "yes_maize banana cassave oranges": [
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "yes_maize cassave": [
+            "maize",
+            "cassava"
+        ],
+        "yes_maize cowpeas": [
+            "cowpea",
+            "maize"
+        ],
+        "yes_maize maize beans": [
+            "other_crops",
+            "maize"
+        ],
+        "yes_maize maize cassave": [
+            "maize",
+            "cassava"
+        ],
+        "yes_maize maize cassave sorghum": [
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "yes_maize maize cowpeas okra": [
+            "cowpea",
+            "other_crops",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea": [
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea cassave": [
+            "pigeon_pea",
+            "maize",
+            "cassava"
+        ],
+        "yes_maize maize pigeon_pea cowpeas": [
+            "cowpea",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea rice": [
+            "rice",
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea sorghum": [
+            "pigeon_pea",
+            "other_crops",
+            "maize"
+        ],
+        "yes_maize maize pigeon_pea sweet_potatoes": [
+            "pigeon_pea",
+            "maize",
+            "sweet_potato"
+        ],
+        "yes_maize maize sesame": [
+            "maize",
+            "sesame"
+        ],
+        "yes_maize maize sorghum": [
+            "other_crops",
+            "maize"
+        ],
+        "yes_maize maize sweet_potatoes sesame": [
+            "maize",
+            "sweet_potato",
+            "sesame"
+        ],
+        "yes_maize pigeon_pea": [
+            "pigeon_pea",
+            "maize"
+        ],
+        "yes_maize pigeon_pea cassave": [
+            "pigeon_pea",
+            "maize",
+            "cassava"
+        ],
+        "yes_maize pumpkin": [
+            "other_crops",
+            "maize"
+        ],
+        "yes_maize rice": [
+            "rice",
+            "maize"
+        ],
+        "yes_maize sugarcane cassave": [
+            "sugarcane",
+            "maize",
+            "cassava"
+        ],
+        "yes_maize sugarcane maize beans": [
+            "other_crops",
+            "sugarcane",
+            "maize"
+        ],
+        "yes_millet millet pigeon_pea": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea amendoim": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea banana": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea banana pigeon_pea cassave": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea banana pigeon_pea maize banana cowpeas": [
+            "cowpea",
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea banana sorghum": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea cassave sorghum": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea cassave sweet_potatoes pumpkin cowpeas": [
+            "cowpea",
+            "sweet_potato",
+            "cassava",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "yes_pigeon_pea cowpeas": [
+            "cowpea",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize": [
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize cassave": [
+            "maize",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea maize millet pigeon_pea cassave": [
+            "other_crops",
+            "maize",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea maize pigeon_pea": [
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea banana": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea banana sugarcane sorghum sunflower cassave": [
+            "maize",
+            "cassava",
+            "sugarcane",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cassave": [
+            "maize",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cassave banana sorghum": [
+            "other_crops",
+            "maize",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cassave cowpeas sunflower": [
+            "cowpea",
+            "maize",
+            "cassava",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cowpeas": [
+            "cowpea",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea cowpeas cassave": [
+            "cowpea",
+            "maize",
+            "cassava",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea millet": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea rice": [
+            "rice",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sesame": [
+            "maize",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sesame sorghum": [
+            "other_crops",
+            "maize",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sorghum": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea soya_beans": [
+            "soybean",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sugarcane banana cassave": [
+            "maize",
+            "cassava",
+            "sugarcane",
+            "pigeon_pea",
+            "other_crops"
+        ],
+        "yes_pigeon_pea maize pigeon_pea sweet_potatoes cassave": [
+            "sweet_potato",
+            "maize",
+            "cassava",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize sesame": [
+            "maize",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea maize sorghum": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize soya_beans": [
+            "soybean",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize sugarcane": [
+            "sugarcane",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize sunflower": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea maize sweet_potatoes": [
+            "maize",
+            "pigeon_pea",
+            "sweet_potato"
+        ],
+        "yes_pigeon_pea millet": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea millet maize pigeon_pea": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea millet pigeon_pea": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea banana cassave": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea banana cassave sorghum": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea beans sesame mangos": [
+            "other_crops",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea pigeon_pea cashew sweet_potatoes mangos cassave custard_apple": [
+            "other_crops",
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave": [
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave green_grams": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave green_grams sweet_potatoes": [
+            "other_crops",
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave pawpaw okra": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sesame": [
+            "pigeon_pea",
+            "sesame",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sorghum": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sorghum okra": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sorghum sweet_potatoes": [
+            "other_crops",
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cassave sweet_potatoes": [
+            "pigeon_pea",
+            "sweet_potato",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea cowpeas cassave": [
+            "cowpea",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea maize": [
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize banana cassave": [
+            "other_crops",
+            "maize",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea maize cowpeas": [
+            "cowpea",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize sorghum": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize sorghum soya_beans": [
+            "soybean",
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize soya_beans": [
+            "soybean",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea maize sunflower": [
+            "other_crops",
+            "maize",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea pumpkin sesame": [
+            "other_crops",
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea pigeon_pea sesame": [
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum beans": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum broad_beans": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum cassave": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea sorghum yoke_beans cassave": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_pigeon_pea pigeon_pea soya_beans": [
+            "soybean",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sunflower": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sunflower broad_beans": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sunflower sorghum": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea pigeon_pea sweet_potatoes": [
+            "pigeon_pea",
+            "sweet_potato"
+        ],
+        "yes_pigeon_pea sesame": [
+            "pigeon_pea",
+            "sesame"
+        ],
+        "yes_pigeon_pea sorghum": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sugarcane": [
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sugarcane banana": [
+            "other_crops",
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sugarcane pigeon_pea": [
+            "sugarcane",
+            "pigeon_pea"
+        ],
+        "yes_pigeon_pea sunflower": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_sorghum maize pigeon_pea": [
+            "pigeon_pea",
+            "other_crops",
+            "maize"
+        ],
+        "yes_sorghum pigeon_pea": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_sorghum pigeon_pea cassave sorghum": [
+            "other_crops",
+            "pigeon_pea",
+            "cassava"
+        ],
+        "yes_sorghum pigeon_pea sorghum": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_sorghum pigeon_pea sunflower": [
+            "other_crops",
+            "pigeon_pea"
+        ],
+        "yes_yoke_beans cassave": [
+            "other_crops",
+            "cassava"
+        ],
+        "yes_yoke_beans maize potatoes cassave pumpkin": [
+            "other_crops",
+            "maize",
+            "cassava"
+        ],
+        "yes_yoke_beans sugarcane tomatoes rice": [
+            "rice",
+            "other_crops",
+            "sugarcane"
+        ],
+        "yoke_beans cassave": [
+            "other_crops",
+            "cassava"
+        ]
+    }
+}
