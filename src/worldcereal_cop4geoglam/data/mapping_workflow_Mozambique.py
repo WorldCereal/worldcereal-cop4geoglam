@@ -41,7 +41,7 @@ def CROPTYPE_EWOC(joined,crop_dict):
     for i, row in joined.iterrows():
         croptype_ewoc = row["ewoc"]
         crop_key = findKey(crop_dict, row["Label"])
-        if not crop_key is None:
+        if crop_key is not None:
             CROPTYPE_EWOC_dict[str(croptype_ewoc)] = crop_key
 
     #Sort dict on keys
