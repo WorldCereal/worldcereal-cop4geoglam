@@ -7,7 +7,7 @@ import os
 
 import fiona
 import geopandas as gpd
-import paramiko # type: ignore
+import paramiko  # type: ignore
 from tqdm import tqdm
 
 path = "/data/users/Public/koendevos/Copernicus4GEOGLAM/Mozambique/" #Change this to the worldcereal path
