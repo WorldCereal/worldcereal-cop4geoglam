@@ -1,6 +1,5 @@
 {
     "DUPLICATE_CROPTYPE_ORIGINAL": {
-
     "no_dominant fodder_grass walnut none": ["fodder_grass","walnut"],
     "no_dominant grapes fallow": ["grapes","fallow"],
     "no_dominant grapes fodder_grass none": ["grapes","fodder_grass"],
@@ -37,11 +36,8 @@
     "yes_sunflower wheat_winter grapes none none": ["sunflower","wheat_winter","grapes"],
     "yes_wheat oats none": ["wheat","oats"],
     "yes_wheat walnut none": ["wheat","walnut"]
-
     },
-
     "DUPLICATE_CROPTYPE_FINAL": {
-
         "no_dominant fodder_grass walnut none": ["orchard"],
         "no_dominant grapes fallow": ["vineyard"],
         "no_dominant grapes fodder_grass none": ["vineyard"],
@@ -78,5 +74,5 @@
         "yes_sunflower wheat_winter grapes none none": ["sunflower","wheat","vineyard"],
         "yes_wheat oats none": ["wheat","other_temporary_crops"],
         "yes_wheat walnut none": ["wheat","orchard"]
-
+    }
 }
