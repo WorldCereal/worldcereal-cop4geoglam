@@ -36,15 +36,39 @@ from sklearn.metrics import (
 )
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from worldcereal.train.datasets import (
-    WorldCerealLabelledDataset,
-    get_class_weights,
-)
 from worldcereal.utils.refdata import map_classes
+
+from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset, get_class_weights
+from worldcereal_cop4geoglam.finetuning_utils import get_class_mappings
 
 
 class PrestoEmbeddingTrainer:
-    """Trainer class for CatBoost models on Presto embeddings."""
+    """
+    PrestoEmbeddingTrainer
+    A trainer class for fine-tuning CatBoost models on Presto embeddings for downstream classification tasks.
+    This class handles the full pipeline for training a CatBoost classifier using embeddings generated from a Presto model. It supports both binary and multiclass classification, flexible class mappings, and downstream class remapping. The trainer manages data loading, embedding computation or loading, class mapping, sample weighting, model setup, training, evaluation, and saving of results and configuration.
+
+    Parameters:
+        presto_model_path (str or Path): Path to the pretrained Presto model weights.
+        data_dir (str or Path): Directory containing the input data parquet files.
+        output_dir (str or Path): Directory to save outputs, logs, and models.
+        finetune_classes (str): Name of the finetune class set to use (default: "LANDCOVER10").
+        timestep_freq (str): Frequency of timesteps for the Presto model ("month" or "dekad").
+        batch_size (int): Batch size for embedding computation.
+        num_workers (int): Number of workers for data loading.
+        modelversion (str): Version string for the model.
+        detector (str): Name of the detector (e.g., "cropland").
+        country (str): Country name for which retrieving the class mapping. Allows retrieving the right json file named class_{country}.json
+        downstream_classes (dict, optional): Mapping from finetune classes to downstream classes.
+
+    Returns:
+        PrestoEmbeddingTrainer: An instance of the trainer class.
+
+    Notes:
+        - The class expects data in parquet format and uses PyTorch for embedding extraction.
+        - Logging is handled via the `logger` object.
+        - The class supports both GPU and CPU training for CatBoost.
+    """
 
     def __init__(
         self,
@@ -57,6 +81,7 @@ class PrestoEmbeddingTrainer:
         num_workers: int = 8,
         modelversion: str = "001",
         detector: str = "cropland",
+        country: str = "Moldova",
         downstream_classes: Optional[dict] = None,
     ):
         self.presto_model_path = Path(presto_model_path)
@@ -68,6 +93,7 @@ class PrestoEmbeddingTrainer:
         self.num_workers = num_workers
         self.modelversion = modelversion
         self.detector = detector
+        self.country = country
         self.downstream_classes = downstream_classes
 
         # Determine if binary classification based on downstream_classes
@@ -168,7 +194,7 @@ class PrestoEmbeddingTrainer:
 
         # Create datasets and dataloaders
         logger.info("Creating datasets...")
-        trn_ds = WorldCerealLabelledDataset(
+        trn_ds = Cop4GeoLabelledDataset(
             train_df,
             num_timesteps=num_timesteps,
             timestep_freq=self.timestep_freq,
@@ -178,7 +204,7 @@ class PrestoEmbeddingTrainer:
             augment=True,
             return_sample_id=True,
         )
-        val_ds = WorldCerealLabelledDataset(
+        val_ds = Cop4GeoLabelledDataset(
             val_df,
             num_timesteps=num_timesteps,
             timestep_freq=self.timestep_freq,
@@ -187,7 +213,7 @@ class PrestoEmbeddingTrainer:
             classes_list=orig_classes,
             return_sample_id=True,
         )
-        test_ds = WorldCerealLabelledDataset(
+        test_ds = Cop4GeoLabelledDataset(
             test_df,
             num_timesteps=num_timesteps,
             timestep_freq=self.timestep_freq,
@@ -357,9 +383,9 @@ class PrestoEmbeddingTrainer:
 
         # Map classes
         logger.info("Mapping classes...")
-        trn_df = map_classes(trn_df, finetune_classes=self.finetune_classes)
-        val_df = map_classes(val_df, finetune_classes=self.finetune_classes)
-        tst_df = map_classes(tst_df, finetune_classes=self.finetune_classes)
+        trn_df = map_classes(trn_df, finetune_classes=self.finetune_classes, class_mappings=get_class_mappings(self.country))
+        val_df = map_classes(val_df, finetune_classes=self.finetune_classes, class_mappings=get_class_mappings(self.country))
+        tst_df = map_classes(tst_df, finetune_classes=self.finetune_classes, class_mappings=get_class_mappings(self.country))
 
         # Save class list
         self.classes_list = sorted(trn_df["finetune_class"].unique())
@@ -706,6 +732,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help='JSON string mapping finetune_classes to downstream classes. Example: \'{"class1": "target", "class2": "non_target"}\'. If not specified, finetune_classes are used directly. If resulting classes are binary, binary mode is automatically enabled.',
     )
+    parser.add_argument(
+        "--country",
+        type=str,
+        default="Moldova",
+        help="Country for which the model is being trained",
+    )
     return parser.parse_args()
 
 
@@ -718,30 +750,49 @@ def main() -> None:
     # =============================================================================
     USE_MANUAL_CONFIG = True
 
+    # for cropland
+    presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130.pt"
+    data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/"
+    output_dir = "./CROPLAND"
+    finetune_classes = "LANDCOVER10"
+    detector = "cropland"
+    downstream_classes = {
+        "temporary_crops": "cropland",
+        "temporary_grasses": "other",
+        "permanent_crops": "cropland",
+        "grasslands": "other",
+        "wetlands": "other",
+        "shrubland": "other",
+        "trees": "other",
+        "built_up": "other",
+        "water": "other",
+    }
+    country = "Moldova_prelim"
+
+    # # for croptype
+    # presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139.pt"
+    # data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139/"
+    # output_dir = "./CROPTYPE"
+    # finetune_classes = "CROPTYPE_Moldova"
+    # detector = "croptype"
+    # downstream_classes = None
+    # country = "Moldova_prelim"
+
     if USE_MANUAL_CONFIG:
         # Manual configuration - edit these values as needed
         class ManualArgs:
             def __init__(self):
-                self.presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130.pt"
-                self.data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/"
-                self.output_dir = "./CROPLAND"
-                self.finetune_classes = "LANDCOVER10"
+                self.presto_model_path = presto_model_path
+                self.data_dir = data_dir
+                self.output_dir = output_dir
+                self.finetune_classes = finetune_classes
                 self.timestep_freq = "month"
                 self.batch_size = 256
                 self.num_workers = 2
                 self.modelversion = "001-debug"
-                self.detector = "cropland"
-                self.downstream_classes = {
-                    "temporary_crops": "cropland",
-                    "temporary_grasses": "other",
-                    "permanent_crops": "cropland",
-                    "grasslands": "other",
-                    "wetlands": "other",
-                    "shrubland": "other",
-                    "trees": "other",
-                    "built_up": "other",
-                    "water": "other",
-                }
+                self.detector = detector
+                self.country = country
+                self.downstream_classes = downstream_classes
 
         args = ManualArgs()
         logger.info("Using manual configuration for debug mode")
@@ -772,6 +823,7 @@ def main() -> None:
         modelversion=args.modelversion,
         detector=args.detector,
         downstream_classes=args.downstream_classes,
+        country=args.country,
     )
 
     # Create initial config
