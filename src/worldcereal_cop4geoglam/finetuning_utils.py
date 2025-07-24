@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 from prometheo.predictors import NODATAVALUE, Predictors
+from torch.optim import AdamW, lr_scheduler
 
 from worldcereal_cop4geoglam.data import croptype_mappings
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
@@ -170,7 +171,7 @@ def evaluate_finetuned_model(
     from torch.utils.data import DataLoader
 
     # storage for full distributions if we need entropy
-    # all_probs_full: list[np.ndarray] = [] 
+    # all_probs_full: list[np.ndarray] = []
 
     # if mask_positions is not None:
     #     # for each mask‐from position, run the full classification_report,
@@ -356,3 +357,56 @@ def evaluate_finetuned_model(
     )
 
     return results_df, cm, cm_norm
+
+
+def warmup_step(model, train_dl, loss_fn, parameters, device, warmup_epochs=5, warmup_lr=1e-6):
+    """
+    Performs a warmup training phase for a given model using a small learning rate.
+
+    Parameters
+    ----------
+    model : torch.nn.Module
+        The model to be trained.
+    train_dl : torch.utils.data.DataLoader
+        DataLoader for the training data.
+    loss_fn : callable
+        Loss function to be used during training.
+    parameters : iterable
+        Iterable of model parameters to optimize.
+    device : torch.device
+        Device on which to perform computations.
+    warmup_epochs : int, optional
+        Number of warmup epochs. Default is 5.
+    warmup_lr : float, optional
+        Learning rate for the warmup phase. Default is 1e-6.
+
+    Returns
+    -------
+    torch.nn.Module
+        The model after the warmup phase.
+    """
+
+    warmup_optimizer = AdamW(parameters, lr=warmup_lr)
+    warmup_scheduler = lr_scheduler.ExponentialLR(warmup_optimizer, gamma=1.0)  # No decay
+
+    for epoch in range(warmup_epochs):
+        model.train()
+        for batch in train_dl:
+            warmup_optimizer.zero_grad()
+            outputs = model(batch)
+            targets = batch.label.to(device)
+            if outputs.dim() > 1 and outputs.size(-1) > 1:
+                # multiclass case: targets should be class indices
+                # predictions are multiclass logits
+                targets = targets.long().squeeze(axis=-1)
+            else:
+                # binary or regression case
+                targets = targets.float()
+            # Compute loss
+            loss = loss_fn(
+                outputs[targets != NODATAVALUE], targets[targets != NODATAVALUE]
+            )
+            loss.backward()
+            warmup_optimizer.step()
+        warmup_scheduler.step()
+    return model

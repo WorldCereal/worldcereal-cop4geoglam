@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import torch
 from loguru import logger
 from prometheo.finetune import Hyperparams, run_finetuning
-from prometheo.models import Presto
 from prometheo.models.presto import param_groups_lrd
+from prometheo.models.presto.wrapper import PretrainedPrestoWrapper, load_presto_weights
 from prometheo.predictors import NODATAVALUE
 from prometheo.utils import DEFAULT_SEED, device, initialize_logging
 from torch import nn
@@ -23,15 +23,16 @@ from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
     get_class_mappings,
     prepare_training_datasets,
+    warmup_step,
 )
-
-CLASS_MAPPINGS = get_class_mappings()
 
 
 def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad"):
     if timestep_freq == "month":
         parquet_files = [
-            "/projects/worldcereal/COP4GEOGLAM/kenya/SR_1km_clusters.geoparquet"
+            # "/projects/worldcereal/COP4GEOGLAM/kenya/SR_1km_clusters.geoparquet"
+            "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions.parquet"
+            # "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions_moldova_duplicated_unique_ids.parquet"
         ]
     elif timestep_freq == "dekad":
         parquet_files = []
@@ -51,6 +52,7 @@ def main(args):
 
     experiment_tag = args.experiment_tag
     timestep_freq = args.timestep_freq  # "month" or "dekad"
+    country = args.country
 
     # Path to the training data
     parquet_files = get_parquet_file_list(timestep_freq)
@@ -84,15 +86,26 @@ def main(args):
     #     masking_info = "no-masking"
 
     experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
-    output_dir = f"/projects/worldcereal/COP4GEOGLAM/models/{experiment_name}"
+    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/{experiment_name}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    CLASS_MAPPINGS = get_class_mappings(country)
+
     # Training parameters
-    pretrained_model_path = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/models/PhaseII/presto-ss-wc_longparquet_random-window-cut_no-time-token_epoch96.pt"
+    if "LANDCOVER" in finetune_classes:
+        pretrained_model_path = "/vitodata/worldcereal/models/WorldCerealPresto/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930_encoder.pt"
+    elif "CROPTYPE" in finetune_classes:
+        pretrained_model_path = "/vitodata/worldcereal/models/WorldCerealPresto/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013_encoder.pt"
+    else:
+        raise ValueError(
+            f"no pretrained model for Finetune classes {finetune_classes}"
+            f"Supported classes are 'LANDCOVER' and 'CROPTYPE'."
+        )
+    # pretrained_model_path = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/models/PhaseII/presto-ss-wc_longparquet_random-window-cut_no-time-token_epoch96.pt"
     epochs = 100
-    batch_size = 1024
+    batch_size = 256
     patience = 6
-    num_workers = 8
+    num_workers = 2
 
     # ------------------------------------------
 
@@ -162,11 +175,12 @@ def main(args):
     )
 
     # Construct the finetuning model based on the pretrained model
-    model = Presto(
+    model = PretrainedPrestoWrapper(
         num_outputs=num_outputs,
         regression=False,
-        pretrained_model_path=pretrained_model_path,
-    ).to(device)
+    )
+    model = load_presto_weights(model, pretrained_model_path, strict=False)
+    model.to(device)
 
     # Define the loss function based on the task type
     if task_type == "binary":
@@ -218,6 +232,21 @@ def main(args):
         shuffle=False,
         num_workers=hyperparams.num_workers,
     )
+
+    # Warmup: run a few batches with a very low learning rate to avoid destroying pretrained weights
+    logger.info("Starting warmup phase...")
+    warmup_epochs = 5
+    warmup_lr = 1e-6
+    model = warmup_step(
+        model=model,
+        train_dl=train_dl,
+        loss_fn=loss_fn,
+        parameters=parameters,
+        device=device,
+        warmup_epochs=warmup_epochs,
+        warmup_lr=warmup_lr,
+    )
+    logger.info("Warmup phase completed.")
 
     # Run the finetuning
     logger.info("Starting finetuning...")
@@ -298,6 +327,13 @@ def parse_args(arg_list=None):
     parser.add_argument(
         "--timestep_freq", type=str, choices=["month", "dekad"], default="month"
     )
+    # Country setup
+    parser.add_argument(
+        "--country",
+        type=str,
+        default="kenya",
+        help="Country to finetune the model for.",
+    )
 
     # Data paths
     parser.add_argument(
@@ -351,14 +387,19 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "debug-run",
+        "test-run-pretrained-WC-FT",
         "--timestep_freq",
         "month",
+        "--country",
+        "Moldova_prelim",
         "--augment",
         "--finetune_classes",
-        "CROPLAND",  # LANDCOVER14
+        # "LANDCOVER10",
+        "CROPTYPE_Moldova",
         "--use_balancing",
-        "--debug",
+        "--val_samples_file",
+        "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/val_ids_moldova.csv",
+        # "--debug",
         # "--masking_train_mode",
         # "random",
         # "--masking_train_from",
