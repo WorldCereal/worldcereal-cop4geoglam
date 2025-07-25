@@ -18,9 +18,11 @@ from openeo_gfmap.backend import cdse_connection
 from worldcereal.job import WorldCerealProductType, create_inference_process_graph
 from worldcereal.parameters import (
     ClassifierParameters,
+    CropLandParameters,
     CropTypeParameters,
     FeaturesParameters,
     PostprocessParameters,
+    PrestoFeatureExtractor,
 )
 
 ONNX_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/onnx_deps_python311.zip"
@@ -107,6 +109,7 @@ def create_worldcereal_inferencejob(
     provider,
     connection_provider,
     epsg: int = 4326,
+    cropland_parameters=None,
     croptype_parameters=None,
     postprocess_parameters=None,
     s1_orbit_state: Optional[str] = None,
@@ -119,6 +122,7 @@ def create_worldcereal_inferencejob(
         spatial_extent=spatial_extent,
         temporal_extent=temporal_extent,
         product_type=WorldCerealProductType.CROPTYPE,
+        cropland_parameters=cropland_parameters,
         croptype_parameters=croptype_parameters,
         postprocess_parameters=postprocess_parameters,
         s1_orbit_state=s1_orbit_state,
@@ -244,22 +248,40 @@ if __name__ == "__main__":
         job_df["start_date"] = start_date
         job_df["end_date"] = end_date
 
-    # Set dedicated feature and classifier parameters for the in-season production run
-    feature_parameters = FeaturesParameters(
+    # Set dedicated feature and classifier parameters
+    feature_parameters_cropland = FeaturesParameters(
         rescale_s1=False,
-        # presto model for Moldova
+        # presto model for cropland embeddings of the country
+        presto_model_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment%3DTrue-balance%3DTrue-timeexplicit%3DFalse-run%3D202507241130_encoder.pt",  # NOQA
+        compile_presto=False,
+    )
+    classifier_parameters_cropland = ClassifierParameters(
+        # CatBoost model for cropland classification of the country
+        classifier_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/PrestoDownstreamCatBoost_cropland_v001-debug.onnx"  # NOQA
+    )
+
+    feature_parameters_croptype = FeaturesParameters(
+        rescale_s1=False,
+        # presto model for croptype embeddings of the country
         presto_model_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment%3DTrue-balance%3DTrue-timeexplicit%3DFalse-run%3D202507241139_encoder.pt",  # NOQA
         compile_presto=False,
     )
-    classifier_parameters = ClassifierParameters(
-        # CatBoost model for Moldova
+    classifier_parameters_croptype = ClassifierParameters(
+        # CatBoost model for croptype classification of the country
         classifier_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/PrestoDownstreamCatBoost_croptype_v001-debug.onnx"  # NOQA
     )
+
+    cropland_parameters = CropLandParameters(
+        feature_extractor=PrestoFeatureExtractor,
+        feature_parameters=feature_parameters_cropland,
+        classifier_parameters=classifier_parameters_cropland,
+    )
+
     croptype_parameters = CropTypeParameters(
-        feature_parameters=feature_parameters,
-        classifier_parameters=classifier_parameters,
+        feature_parameters=feature_parameters_croptype,
+        classifier_parameters=classifier_parameters_croptype,
         # Save resources, no cropland mask needed for the production run
-        mask_cropland=False,
+        mask_cropland=True,
     )
 
     # No postprocessing for the production run as we do this afterwards
@@ -283,6 +305,7 @@ if __name__ == "__main__":
                 start_job=partial(
                     create_worldcereal_inferencejob,
                     epsg=epsg,
+                    cropland_parameters=cropland_parameters,
                     croptype_parameters=croptype_parameters,
                     postprocess_parameters=postprocess_parameters,
                     s1_orbit_state=s1_orbit_state,
