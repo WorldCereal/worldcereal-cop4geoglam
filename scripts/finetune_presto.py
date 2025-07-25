@@ -102,8 +102,8 @@ def main(args):
 
     # Training parameters
     if "LANDCOVER" in finetune_classes:
-        pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["LANCOVER"]
-        pretrained_model_tag = "LANCOVER"
+        pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["LANDCOVER"]
+        pretrained_model_tag = "LANDCOVER"
         logger.info("Using pretrained model LANDCOVER model")
     elif "CROPTYPE" in finetune_classes:
         pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["CROPTYPE"]
