@@ -8,6 +8,7 @@ import torch
 from prometheo.predictors import NODATAVALUE, Predictors
 from torch.optim import AdamW, lr_scheduler
 
+from worldcereal_cop4geoglam.constants import COUNTRY_CLASS_MAPPINGS
 from worldcereal_cop4geoglam.data import croptype_mappings
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
 
@@ -21,7 +22,7 @@ def get_class_mappings(country: str = "kenya") -> Dict:
         the resulting dictionary with the class mappings
     """
     with importlib.resources.open_text(
-        croptype_mappings, f"class_mappings_{country}.json"
+        croptype_mappings, f"class_mappings_{COUNTRY_CLASS_MAPPINGS[country]}.json"
     ) as f:  # type: ignore
         CLASS_MAPPINGS = json.load(f)
 

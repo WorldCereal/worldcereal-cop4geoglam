@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 import torch
 from loguru import logger
 from prometheo.finetune import Hyperparams, run_finetuning
+from prometheo.models import Presto
 from prometheo.models.presto import param_groups_lrd
-from prometheo.models.presto.wrapper import PretrainedPrestoWrapper, load_presto_weights
+from prometheo.models.presto.wrapper import load_presto_weights
 from prometheo.predictors import NODATAVALUE
 from prometheo.utils import DEFAULT_SEED, device, initialize_logging
 from torch import nn
@@ -19,28 +20,36 @@ from torch.utils.data import DataLoader
 # from worldcereal_in_season.datasets import MaskingStrategy
 from worldcereal.train.data import get_training_dfs_from_parquet
 
+from worldcereal_cop4geoglam.constants import (
+    COUNTRY_PARQUET_FILES,
+    PRESTO_PRETRAINED_MODEL_PATH,
+)
 from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
     get_class_mappings,
     prepare_training_datasets,
-    warmup_step,
+    # warmup_step,
 )
 
 
-def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad"):
-    if timestep_freq == "month":
-        parquet_files = [
-            # "/projects/worldcereal/COP4GEOGLAM/kenya/SR_1km_clusters.geoparquet"
-            "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions.parquet"
-            # "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions_moldova_duplicated_unique_ids.parquet"
-        ]
-    elif timestep_freq == "dekad":
-        parquet_files = []
+def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad", country: str = "moldova"):
+    if country.lower() in COUNTRY_PARQUET_FILES:
+        if timestep_freq in COUNTRY_PARQUET_FILES[country.lower()]:
+            parquet_files = COUNTRY_PARQUET_FILES[country.lower()][timestep_freq]
+            if parquet_files == []:
+                raise FileNotFoundError(
+                    f"No parquet files found for {country}"
+                )
+        else:
+            raise ValueError(
+                f"Timestep frequency {timestep_freq} not supported for country {country}. "
+                "Supported timestep frequencies are 'month' and 'dekad'."
+            )
     else:
         raise ValueError(
-            f"timestep_freq {timestep_freq} is not supported. Supported values are 'month' and 'dekad'."
+            f"Country {country} not supported. "
+            "Supported countries are 'kenya', 'moldova', and 'mozambique'."
         )
-
     return parquet_files
 
 
@@ -55,7 +64,7 @@ def main(args):
     country = args.country
 
     # Path to the training data
-    parquet_files = get_parquet_file_list(timestep_freq)
+    parquet_files = get_parquet_file_list(timestep_freq=timestep_freq, country=country)
     val_samples_file = args.val_samples_file  # If None, random split is used
 
     finetune_classes = args.finetune_classes
@@ -93,15 +102,20 @@ def main(args):
 
     # Training parameters
     if "LANDCOVER" in finetune_classes:
-        pretrained_model_path = "/vitodata/worldcereal/models/WorldCerealPresto/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930_encoder.pt"
+        pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["LANCOVER"]
+        pretrained_model_tag = "LANCOVER"
+        logger.info("Using pretrained model LANDCOVER model")
     elif "CROPTYPE" in finetune_classes:
-        pretrained_model_path = "/vitodata/worldcereal/models/WorldCerealPresto/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013_encoder.pt"
+        pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["CROPTYPE"]
+        pretrained_model_tag = "CROPTYPE"
+        logger.info("Using pretrained model CROPTYPE model")
     else:
-        raise ValueError(
-            f"no pretrained model for Finetune classes {finetune_classes}"
-            f"Supported classes are 'LANDCOVER' and 'CROPTYPE'."
-        )
-    # pretrained_model_path = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/models/PhaseII/presto-ss-wc_longparquet_random-window-cut_no-time-token_epoch96.pt"
+        pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["DEFAULT"]
+        pretrained_model_tag = "DEFAULT"
+        logger.info(f"No pretrained model for Finetune classes {finetune_classes}. "
+                    f"Supported classes are 'LANDCOVER' and 'CROPTYPE'. "
+                    f"Loading default WorldCereal pretrained model: {pretrained_model_path}")
+
     epochs = 100
     batch_size = 256
     patience = 6
@@ -175,11 +189,18 @@ def main(args):
     )
 
     # Construct the finetuning model based on the pretrained model
-    model = PretrainedPrestoWrapper(
-        num_outputs=num_outputs,
-        regression=False,
-    )
-    model = load_presto_weights(model, pretrained_model_path, strict=False)
+    if pretrained_model_tag != "DEFAULT":
+        model = Presto(
+            num_outputs=num_outputs,
+            regression=False,
+        )
+        model = load_presto_weights(model, pretrained_model_path, strict=False)
+    else:
+        model = Presto(
+            num_outputs=num_outputs,
+            regression=False,
+            pretrained_model_path=pretrained_model_path,
+        )
     model.to(device)
 
     # Define the loss function based on the task type
@@ -200,9 +221,24 @@ def main(args):
         patience=patience,
         num_workers=num_workers,
     )
+
+    warmup_epochs = 5
     parameters = param_groups_lrd(model)
     optimizer = AdamW(parameters, lr=1e-4)
-    scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+
+    # the learning rate of the warmup scheduler starts at LR x 1e-3
+    # and increases up to the LR of the optimizer
+    warmup_scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1e-3, end_factor=1, total_iters=warmup_epochs)
+    decay_scheduler  = lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+
+    # combine the warmup and decay schedulers
+    # This will first apply the warmup for the specified number of epochs,
+    # then switch to the decay scheduler
+    scheduler = lr_scheduler.SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, decay_scheduler],
+        milestones=[warmup_epochs],
+    )
 
     # Setup dataloaders
     generator = torch.Generator()
@@ -234,19 +270,18 @@ def main(args):
     )
 
     # Warmup: run a few batches with a very low learning rate to avoid destroying pretrained weights
-    logger.info("Starting warmup phase...")
-    warmup_epochs = 5
-    warmup_lr = 1e-6
-    model = warmup_step(
-        model=model,
-        train_dl=train_dl,
-        loss_fn=loss_fn,
-        parameters=parameters,
-        device=device,
-        warmup_epochs=warmup_epochs,
-        warmup_lr=warmup_lr,
-    )
-    logger.info("Warmup phase completed.")
+    # logger.info("Starting warmup phase...")
+
+    # model = warmup_step(
+    #     model=model,
+    #     train_dl=train_dl,
+    #     loss_fn=loss_fn,
+    #     parameters=parameters,
+    #     device=device,
+    #     warmup_epochs=warmup_epochs,
+    #     warmup_lr=warmup_lr,
+    # )
+    # logger.info("Warmup phase completed.")
 
     # Run the finetuning
     logger.info("Starting finetuning...")
@@ -387,11 +422,11 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "test-run-pretrained-WC-FT",
+        "test-run-warmup",
         "--timestep_freq",
         "month",
         "--country",
-        "Moldova_prelim",
+        "moldova",
         "--augment",
         "--finetune_classes",
         # "LANDCOVER10",
