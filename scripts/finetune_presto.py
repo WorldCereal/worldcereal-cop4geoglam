@@ -269,20 +269,6 @@ def main(args):
         num_workers=hyperparams.num_workers,
     )
 
-    # Warmup: run a few batches with a very low learning rate to avoid destroying pretrained weights
-    # logger.info("Starting warmup phase...")
-
-    # model = warmup_step(
-    #     model=model,
-    #     train_dl=train_dl,
-    #     loss_fn=loss_fn,
-    #     parameters=parameters,
-    #     device=device,
-    #     warmup_epochs=warmup_epochs,
-    #     warmup_lr=warmup_lr,
-    # )
-    # logger.info("Warmup phase completed.")
-
     # Run the finetuning
     logger.info("Starting finetuning...")
     finetuned_model = run_finetuning(
