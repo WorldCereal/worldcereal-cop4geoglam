@@ -28,7 +28,6 @@ from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
     get_class_mappings,
     prepare_training_datasets,
-    # warmup_step,
 )
 
 
@@ -95,7 +94,7 @@ def main(args):
     #     masking_info = "no-masking"
 
     experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
-    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/{experiment_name}"
+    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/{experiment_name}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     CLASS_MAPPINGS = get_class_mappings(country)
@@ -224,7 +223,7 @@ def main(args):
 
     warmup_epochs = 5
     parameters = param_groups_lrd(model)
-    optimizer = AdamW(parameters, lr=1e-4)
+    optimizer = AdamW(parameters, lr=2e-4)
 
     # the learning rate of the warmup scheduler starts at LR x 1e-3
     # and increases up to the LR of the optimizer
@@ -408,7 +407,7 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "test-run-warmup",
+        "august_extractions",
         "--timestep_freq",
         "month",
         "--country",
@@ -417,7 +416,7 @@ if __name__ == "__main__":
         "--finetune_classes",
         # "LANDCOVER10",
         "CROPTYPE_Moldova",
-        "--use_balancing",
+        # "--use_balancing",
         "--val_samples_file",
         "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/val_ids_moldova.csv",
         # "--debug",
