@@ -83,6 +83,8 @@ class PrestoEmbeddingTrainer:
         detector: str = "cropland",
         country: str = "moldova",
         downstream_classes: Optional[dict] = None,
+        balance: bool = True,
+        cb_model_name: str = "PrestoDownstreamCatBoost",
     ):
         self.presto_model_path = Path(presto_model_path)
         self.data_dir = Path(data_dir)
@@ -95,6 +97,8 @@ class PrestoEmbeddingTrainer:
         self.detector = detector
         self.country = country
         self.downstream_classes = downstream_classes
+        self.balance = balance
+        self.cb_model_name = cb_model_name
 
         # Determine if binary classification based on downstream_classes
         if self.downstream_classes is not None:
@@ -325,22 +329,27 @@ class PrestoEmbeddingTrainer:
         feat_cols = [c for c in trn_df.columns if c.startswith("emb_")]
         self.feat_cols = feat_cols
 
-        # Calculate class weights
-        logger.info("Calculating class weights...")
-        class_weights = get_class_weights(
-            trn_df[self.target_column].values,
-            method="log",
-            clip_range=(0.2, 10),
-            normalize=True,
-        )
+        if self.balance:
+            # Calculate class weights
+            logger.info("Calculating class weights...")
+            class_weights = get_class_weights(
+                trn_df[self.target_column].values,
+                method="log",
+                clip_range=(0.2, 10),
+                normalize=True,
+            )
 
-        # Apply sample weights
-        sample_weights = np.ones_like(
-            trn_df[self.target_column].values, dtype=np.float32
-        )
-        for k, v in class_weights.items():
-            sample_weights[trn_df[self.target_column].values == k] = v
-        trn_df["weight"] = sample_weights
+            # Apply sample weights
+            sample_weights = np.ones_like(
+                trn_df[self.target_column].values, dtype=np.float32
+            )
+            for k, v in class_weights.items():
+                sample_weights[trn_df[self.target_column].values == k] = v
+            trn_df["weight"] = sample_weights
+        else:
+            class_weights = {cls: 1.0 for cls in self.classes_list}
+            trn_df["weight"] = 1.0  # Uniform weights for all samples
+
         val_df["weight"] = 1.0  # Validation weights are uniform
         tst_df["weight"] = 1.0  # Test weights are uniform
 
@@ -356,6 +365,7 @@ class PrestoEmbeddingTrainer:
         self.config["class_weights"] = {
             str(k): float(v) for k, v in class_weights.items()
         }
+        self.config["balance"] = self.balance
         self.save_config()
 
         return trn_df, val_df, tst_df
@@ -509,15 +519,14 @@ class PrestoEmbeddingTrainer:
 
     def save_model(self, model: CatBoostClassifier) -> None:
         """Save model in both CBM and ONNX formats."""
-        modelname = f"PrestoDownstreamCatBoost_{self.detector}_v{self.modelversion}"
 
         # Save as CBM
-        cbm_path = self.output_dir / f"{modelname}.cbm"
+        cbm_path = self.output_dir / f"{self.cb_model_name}.cbm"
         model.save_model(cbm_path)
         logger.info(f"Model saved as CBM: {cbm_path}")
 
         # Save as ONNX
-        onnx_path = self.output_dir / f"{modelname}.onnx"
+        onnx_path = self.output_dir / f"{self.cb_model_name}.onnx"
         model.save_model(
             str(onnx_path),
             format="onnx",
@@ -721,6 +730,12 @@ def parse_args() -> argparse.Namespace:
         "--modelversion", type=str, default="001", help="Model version identifier"
     )
     parser.add_argument(
+        "--presto_model_name", type=str, default="presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202508191053", help="Presto model name"
+    )
+    parser.add_argument(
+        "--cb_model_name", type=str, default="PrestoDownstreamCatBoost_croptype_v100_MDA_balance=False", help="CatBoost model name"
+    )
+    parser.add_argument(
         "--detector",
         type=str,
         default="cropland",
@@ -738,6 +753,12 @@ def parse_args() -> argparse.Namespace:
         default="Moldova",
         help="Country for which the model is being trained",
     )
+    parser.add_argument(
+        "--balance",
+        type=bool,
+        default=False,
+        help="Whether to balance the dataset",
+    )
     return parser.parse_args()
 
 
@@ -751,13 +772,12 @@ def main() -> None:
     USE_MANUAL_CONFIG = True
 
     # # for cropland
+    # balance = True
     # country = "moldova"
-    # model_name = "presto-prometheo-cop4geoglam-august_extractions-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202508191019"
-    # presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/{model_name}.pt"
-    # data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/"
-    # output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/CROPLAND"
+    # modelversion = "100-MDA"
     # finetune_classes = "LANDCOVER10"
     # detector = "cropland"
+    # presto_model_name = "presto-prometheo-cop4geoglam-august_extractions-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202508191019"
     # downstream_classes = {
     #     "temporary_crops": "cropland",
     #     "temporary_grasses": "other",
@@ -769,18 +789,21 @@ def main() -> None:
     #     "built_up": "other",
     #     "water": "other",
     # }
-    # modelversion = "100-MDA"
 
     # for croptype
+    balance = False
     country = "moldova"
-    model_name = "presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202508191053"
-    presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/{model_name}.pt"
-    data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/"
-    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/CROPTYPE"
+    modelversion = "100-MDA"
     finetune_classes = "CROPTYPE_Moldova"
     detector = "croptype"
+    presto_model_name = "presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202508191053"
     downstream_classes = None
-    modelversion = "100-MDA"
+
+    # set up paths and filenames
+    cb_model_name = f"PrestoDownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
+    presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{presto_model_name}/{presto_model_name}.pt"
+    data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{presto_model_name}/"
+    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/{detector}/{cb_model_name}"
 
     if USE_MANUAL_CONFIG:
         # Manual configuration - edit these values as needed
@@ -797,6 +820,8 @@ def main() -> None:
                 self.detector = detector
                 self.country = country
                 self.downstream_classes = downstream_classes
+                self.balance = balance
+                self.cb_model_name = cb_model_name
 
         args = ManualArgs()
         logger.info("Using manual configuration for debug mode")
@@ -828,6 +853,8 @@ def main() -> None:
         detector=args.detector,
         downstream_classes=args.downstream_classes,
         country=args.country,
+        balance=args.balance,
+        cb_model_name=args.cb_model_name
     )
 
     # Create initial config
