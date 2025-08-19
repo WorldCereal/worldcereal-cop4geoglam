@@ -25,6 +25,8 @@ from worldcereal.parameters import (
     PrestoFeatureExtractor,
 )
 
+from worldcereal_cop4geoglam.constants import PRODUCTION_MODELS_URLS
+
 ONNX_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/onnx_deps_python311.zip"
 FEATURE_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/torch_deps_python311.zip"
 RETRYABLE_CODES = {500, 502, 504}
@@ -189,8 +191,9 @@ def generate_output_path_inference(
 if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
+    country = "moldova"
     output_folder = Path(
-        "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/production/PSU_test/raw"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/PSU_test_with_cropland_mask/raw"
     )
     epsg = 32635
     parallel_jobs = 15
@@ -201,7 +204,7 @@ if __name__ == "__main__":
     s1_orbit_state = "DESCENDING"  # If None, it will be automatically determined but we want it fixed here.
     start_date = "2024-10-01"
     end_date = "2025-09-30"
-    production_grid = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/refdata/MDA_PSU_with_psu_name.parquet"
+    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MDA_PSU_with_psu_name.parquet"
     restart_failed = True  # If True, it will restart failed jobs
     # ------------------------
 
@@ -252,23 +255,23 @@ if __name__ == "__main__":
     feature_parameters_cropland = FeaturesParameters(
         rescale_s1=False,
         # presto model for cropland embeddings of the country
-        presto_model_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment%3DTrue-balance%3DTrue-timeexplicit%3DFalse-run%3D202507241130_encoder.pt",  # NOQA
+        presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"]["cropland"],  # NOQA
         compile_presto=False,
     )
     classifier_parameters_cropland = ClassifierParameters(
         # CatBoost model for cropland classification of the country
-        classifier_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/PrestoDownstreamCatBoost_cropland_v001-debug.onnx"  # NOQA
+        classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["cropland"]  # NOQA
     )
 
     feature_parameters_croptype = FeaturesParameters(
         rescale_s1=False,
         # presto model for croptype embeddings of the country
-        presto_model_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment%3DTrue-balance%3DTrue-timeexplicit%3DFalse-run%3D202507241139_encoder.pt",  # NOQA
+        presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"]["croptype"],  # NOQA
         compile_presto=False,
     )
     classifier_parameters_croptype = ClassifierParameters(
         # CatBoost model for croptype classification of the country
-        classifier_url="https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/PrestoDownstreamCatBoost_croptype_v001-debug.onnx"  # NOQA
+        classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["croptype"]  # NOQA
     )
 
     cropland_parameters = CropLandParameters(
@@ -282,11 +285,14 @@ if __name__ == "__main__":
         classifier_parameters=classifier_parameters_croptype,
         # Save resources, no cropland mask needed for the production run
         mask_cropland=True,
+        save_mask=True,
     )
 
     # No postprocessing for the production run as we do this afterwards
-    postprocess_parameters = PostprocessParameters(enable=False)
-
+    postprocess_parameters = PostprocessParameters(enable=True,
+                                                   method="majority_vote", # to address spure predictions
+                                                   save_intermediate=True # saves not postprocessed
+                                                   )
     # Retry loop starts here
     attempt = 0
     while True:
