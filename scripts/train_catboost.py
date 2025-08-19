@@ -81,7 +81,7 @@ class PrestoEmbeddingTrainer:
         num_workers: int = 8,
         modelversion: str = "001",
         detector: str = "cropland",
-        country: str = "Moldova",
+        country: str = "moldova",
         downstream_classes: Optional[dict] = None,
     ):
         self.presto_model_path = Path(presto_model_path)
@@ -750,33 +750,37 @@ def main() -> None:
     # =============================================================================
     USE_MANUAL_CONFIG = True
 
-    # for cropland
-    presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130.pt"
-    data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/"
-    output_dir = "./CROPLAND"
-    finetune_classes = "LANDCOVER10"
-    detector = "cropland"
-    downstream_classes = {
-        "temporary_crops": "cropland",
-        "temporary_grasses": "other",
-        "permanent_crops": "cropland",
-        "grasslands": "other",
-        "wetlands": "other",
-        "shrubland": "other",
-        "trees": "other",
-        "built_up": "other",
-        "water": "other",
-    }
-    country = "Moldova_prelim"
+    # # for cropland
+    # country = "moldova"
+    # model_name = "presto-prometheo-cop4geoglam-august_extractions-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202508191019"
+    # presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/{model_name}.pt"
+    # data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/"
+    # output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/CROPLAND"
+    # finetune_classes = "LANDCOVER10"
+    # detector = "cropland"
+    # downstream_classes = {
+    #     "temporary_crops": "cropland",
+    #     "temporary_grasses": "other",
+    #     "permanent_crops": "cropland",
+    #     "grasslands": "other",
+    #     "wetlands": "other",
+    #     "shrubland": "other",
+    #     "trees": "other",
+    #     "built_up": "other",
+    #     "water": "other",
+    # }
+    # modelversion = "100-MDA"
 
-    # # for croptype
-    # presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139.pt"
-    # data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139/"
-    # output_dir = "./CROPTYPE"
-    # finetune_classes = "CROPTYPE_Moldova"
-    # detector = "croptype"
-    # downstream_classes = None
-    # country = "Moldova_prelim"
+    # for croptype
+    country = "moldova"
+    model_name = "presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202508191053"
+    presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/{model_name}.pt"
+    data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{model_name}/"
+    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/CROPTYPE"
+    finetune_classes = "CROPTYPE_Moldova"
+    detector = "croptype"
+    downstream_classes = None
+    modelversion = "100-MDA"
 
     if USE_MANUAL_CONFIG:
         # Manual configuration - edit these values as needed
@@ -789,7 +793,7 @@ def main() -> None:
                 self.timestep_freq = "month"
                 self.batch_size = 256
                 self.num_workers = 2
-                self.modelversion = "001-debug"
+                self.modelversion = modelversion
                 self.detector = detector
                 self.country = country
                 self.downstream_classes = downstream_classes
