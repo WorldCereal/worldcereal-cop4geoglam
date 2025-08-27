@@ -205,7 +205,7 @@ class PrestoEmbeddingTrainer:
             task_type="multiclass",
             num_outputs=len(orig_classes),
             classes_list=orig_classes,
-            augment=True,
+            augment=False,
             return_sample_id=True,
         )
         val_ds = Cop4GeoLabelledDataset(
@@ -552,7 +552,7 @@ class PrestoEmbeddingTrainer:
             true_labels, preds, output_dict=True, zero_division=0
         )
         report_df = pd.DataFrame(report).transpose()
-        report_df.to_csv(self.output_dir / "classification_report.csv")
+        report_df.to_csv(self.output_dir / f"{self.cb_model_name}_classification_report.csv")
 
         # Confusion matrices
         self._plot_confusion_matrices(true_labels, preds)
@@ -561,7 +561,7 @@ class PrestoEmbeddingTrainer:
         metrics = self._calculate_metrics(true_labels, preds)
 
         # Save metrics
-        with open(self.output_dir / "metrics.txt", "w") as f:
+        with open(self.output_dir / f"{self.cb_model_name}_metrics.txt", "w") as f:
             f.write("Test results:\n")
             for key, value in metrics.items():
                 f.write(f"{key}: {value}\n")
@@ -583,7 +583,7 @@ class PrestoEmbeddingTrainer:
         cm.plot(ax=ax, cmap=plt.cm.Blues, colorbar=False)
         plt.setp(ax.get_xticklabels(), rotation=90, ha="center")
         plt.tight_layout()
-        plt.savefig(self.output_dir / "CM_abs.png")
+        plt.savefig(self.output_dir / f"{self.cb_model_name}_CM_abs.png")
         plt.close(fig)
 
         # Normalized confusion matrix
@@ -597,7 +597,7 @@ class PrestoEmbeddingTrainer:
             text.set_text(f"{val:.2f}")
         plt.setp(ax.get_xticklabels(), rotation=90, ha="center")
         plt.tight_layout()
-        plt.savefig(self.output_dir / "CM_norm.png")
+        plt.savefig(self.output_dir / f"{self.cb_model_name}_CM_norm.png")
         plt.close(fig)
 
     def _calculate_metrics(self, true_labels: np.ndarray, preds: np.ndarray) -> dict:
@@ -639,7 +639,7 @@ class PrestoEmbeddingTrainer:
         ax.bar(np.array(self.feat_cols)[sorting], np.array(ft_imp)[sorting])
         ax.set_xticklabels(np.array(self.feat_cols)[sorting], rotation=90)
         plt.tight_layout()
-        plt.savefig(self.output_dir / "feature_importance.png")
+        plt.savefig(self.output_dir / f"{self.cb_model_name}_feature_importance.png")
         plt.close(f)
 
     def create_config(self) -> None:
@@ -662,7 +662,7 @@ class PrestoEmbeddingTrainer:
 
     def save_config(self) -> None:
         """Save configuration to JSON file."""
-        config_path = self.output_dir / "config.json"
+        config_path = self.output_dir / f"{self.cb_model_name}_config.json"
 
         # Convert any numpy types to Python native types
         def convert_numpy_types(obj):
@@ -777,7 +777,7 @@ def main() -> None:
     # modelversion = "100-MDA"
     # finetune_classes = "LANDCOVER10"
     # detector = "cropland"
-    # presto_model_name = "presto-prometheo-cop4geoglam-august_extractions-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202508191019"
+    # presto_model_name = "presto-prometheo-cop4geoglam-controlled_extractions-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202508261206"
     # downstream_classes = {
     #     "temporary_crops": "cropland",
     #     "temporary_grasses": "other",
@@ -791,16 +791,17 @@ def main() -> None:
     # }
 
     # for croptype
-    balance = False
+    balance = True
     country = "moldova"
     modelversion = "100-MDA"
     finetune_classes = "CROPTYPE_Moldova"
     detector = "croptype"
-    presto_model_name = "presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202508191053"
+    presto_model_name = "presto-prometheo-cop4geoglam-controlled_extractions-month-CROPTYPE_Moldova-augment=False-balance=True-timeexplicit=False-run=202508261211"
     downstream_classes = None
 
     # set up paths and filenames
-    cb_model_name = f"PrestoDownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
+    presto_run_tag = presto_model_name.split('-')[-1]
+    cb_model_name = f"Presto_{presto_run_tag}_DownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
     presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{presto_model_name}/{presto_model_name}.pt"
     data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{presto_model_name}/"
     output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/{detector}/{cb_model_name}"
