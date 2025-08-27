@@ -17,7 +17,8 @@ COUNTRY_PARQUET_FILES: Dict[str, Dict[str, List[str]]] = {
 
     "moldova": {
         "month": [
-            "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions.parquet"
+            # "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions.parquet"
+            "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/MDA_extractions_2024-09-01_2025-08-31_controlled.parquet"
         ],
         "dekad": []
     },
@@ -29,8 +30,8 @@ COUNTRY_PARQUET_FILES: Dict[str, Dict[str, List[str]]] = {
 
 COUNTRY_CLASS_MAPPINGS: Dict[str, str] = {
     "kenya": "kenya",
-    "moldova": "Moldova_prelim",
-    "mozambique": "Mozambique_prelim"
+    "moldova": "moldova",
+    "mozambique": "mozambique"
 }
 
 PRODUCTION_MODELS_URLS: Dict[str, Dict[str, Dict[str, str]]] = {
