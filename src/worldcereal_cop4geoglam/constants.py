@@ -37,12 +37,12 @@ COUNTRY_CLASS_MAPPINGS: Dict[str, str] = {
 PRODUCTION_MODELS_URLS: Dict[str, Dict[str, Dict[str, str]]] = {
     "moldova": {
         "presto":{
-            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-august_extractions-month-LANDCOVER10-augment%3DTrue-balance%3DTrue-timeexplicit%3DFalse-run%3D202508191019_encoder.pt",
-            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment%3DTrue-balance%3DTrue-timeexplicit%3DFalse-run%3D202508191053_encoder.pt",
+            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-new_val_ids-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-run%3D202508271322_encoder.pt",
+            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-new_val_ids-month-CROPTYPE_Moldova-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-run%3D202508271333_encoder.pt",
         },
         "catboost": {
-            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/PrestoDownstreamCatBoost_cropland_v100-MDA.onnx",
-            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/PrestoDownstreamCatBoost_croptype_v100-MDA.onnx",
+            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271322_DownstreamCatBoost_cropland_v100-MDA_balance%3DTrue.onnx",
+            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271333_DownstreamCatBoost_croptype_v100-MDA_balance%3DTrue.onnx",
         }
     }
 }
