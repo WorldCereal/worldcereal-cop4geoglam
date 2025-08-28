@@ -106,7 +106,7 @@ Copy the URLs to the models and report them in the `constants.py` script in the 
 Submits large-scale inference jobs for crop type and cropland prediction using trained models.
 
 **Main Steps:**
-- Loads a grid of tiles for the target country.
+- Loads a grid of tiles for the target country (check [`generate_country_grid.py`](scripts/generate_country_grid.py) to generate the country grid)
 - Sets up feature and classifier parameters using URLs from [`PRODUCTION_MODELS_URLS`](src/worldcereal_cop4geoglam/constants.py).
 - Creates and manages inference jobs using OpenEO/CDSE backend.
 - Handles job tracking, retries, and output organization.
