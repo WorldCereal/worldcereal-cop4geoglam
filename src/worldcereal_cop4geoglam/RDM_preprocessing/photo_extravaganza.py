@@ -10,8 +10,8 @@ import geopandas as gpd
 import paramiko  # type: ignore
 from tqdm import tqdm
 
-path = "/data/users/Public/koendevos/Copernicus4GEOGLAM/Mozambique/" #Change this to the worldcereal path
-crop_points_file = "moz_results_2025.gpkg"
+path = "/data/sigma/cop4geo/mda/" #Change this to the worldcereal path
+crop_points_file = "mda_results_2025.gpkg"
 activation = crop_points_file.replace(".gpkg", "")
 
 ## Terrasphere host
@@ -53,6 +53,12 @@ mixed_dominant_detail = []
 mixed_dominant_photos_label = []
 no_dominant_photos_overview = []
 mixed_dominant_photos_overview = []
+crops_all_detail = []
+crops_all_overview = []
+crops_all_detail_label = []
+nd_psu = []
+md_psu = []
+all_psu = []
 
 for i, row in croptype_points.iterrows():
     croptype = row["croptype"]
@@ -60,16 +66,22 @@ for i, row in croptype_points.iterrows():
         no_dominant_photos_detail.append(row["detail_photo_of_field"])
         no_dominant_photos_overview.append(row["overview_photo_of_field"])
         no_dominant_photos_detail_label.append(row["croptype"])
+        nd_psu.append(row["id_ssu"])
     elif "yes" in croptype:
         mixed_dominant_detail.append(row["detail_photo_of_field"])
         mixed_dominant_photos_overview.append(row["overview_photo_of_field"])
         mixed_dominant_photos_label.append(row["croptype"])
+        md_psu.append(row["id_ssu"])
     elif " " in croptype:
         no_dominant_photos_detail.append(row["detail_photo_of_field"])
         no_dominant_photos_overview.append(row["overview_photo_of_field"])
         no_dominant_photos_detail_label.append(row["croptype"])
+        nd_psu.append(row["id_ssu"])
     else:
-        continue
+        crops_all_detail.append(row["detail_photo_of_field"])
+        crops_all_overview.append(row["overview_photo_of_field"])
+        crops_all_detail_label.append(row["croptype"])
+        all_psu.append(row["id_ssu"])
 
 #Make connection to the terrasphere server
 client.connect(hostname, port, username, password)
@@ -82,6 +94,8 @@ no_dominant_photos_detail = [photos_path_detail + photo for photo in no_dominant
 mixed_dominant_detail = [photos_path_detail + photo for photo in mixed_dominant_detail]
 no_dominant_photos_overview = [photos_path_overview + photo for photo in no_dominant_photos_overview]
 mixed_dominant_photos_overview = [photos_path_overview + photo for photo in mixed_dominant_photos_overview]
+crops_all_detail = [photos_path_detail + str(photo) for photo in crops_all_detail]
+crops_all_overview = [photos_path_overview + str(photo) for photo in crops_all_overview]
 
 
 os.makedirs(os.path.join(path, "no_dominant_photos"), exist_ok=True)
@@ -90,6 +104,9 @@ os.makedirs(os.path.join(path, "mixed_dominant_photos"), exist_ok=True)
 os.chmod(os.path.join(path, "mixed_dominant_photos"), 0o777)
 os.makedirs(os.path.join(path, "overview_pictures"), exist_ok=True)
 os.chmod(os.path.join(path, "overview_pictures"), 0o777)
+os.makedirs(os.path.join(path, "all_crops_photos"), exist_ok=True)
+os.chmod(os.path.join(path, "all_crops_photos"), 0o777)
+
 
 try:
     # Connect to the server
@@ -100,28 +117,41 @@ try:
 
     for photo in tqdm(no_dominant_photos_detail, desc="Taking pictures- Say Cheese! 🧀", unit="photo"):
         i = no_dominant_photos_detail.index(photo)
-        local_path = os.path.join(path, "no_dominant_photos", os.path.basename(photo)+f"_{no_dominant_photos_detail_label[i]}.jpg")
+        local_path = os.path.join(path, "no_dominant_photos", f"{nd_psu[i]}_"+ os.path.basename(photo)+f"_{no_dominant_photos_detail_label[i]}.jpg")
         if not os.path.exists(local_path):
             sftp.get(photo, local_path)
 
     for photo in tqdm(mixed_dominant_detail, desc="Taking pictures- Say Cheese! 🧀", unit="photo"):
         i = mixed_dominant_detail.index(photo)
-        local_path = os.path.join(path, "mixed_dominant_photos", os.path.basename(photo)+f"_{mixed_dominant_photos_label[i]}.jpg")
+        local_path = os.path.join(path, "mixed_dominant_photos", f"{md_psu[i]}_" + os.path.basename(photo)+f"_{mixed_dominant_photos_label[i]}.jpg")
         if not os.path.exists(local_path):
             sftp.get(photo, local_path)
 
     for photo in tqdm(no_dominant_photos_overview, desc="Taking overview pictures- Say Cheese! 🧀", unit="photo"):
         i = no_dominant_photos_overview.index(photo)
-        local_path = os.path.join(path, "overview_pictures", os.path.basename(photo)+f"_{no_dominant_photos_detail_label[i]}.jpg")
+        local_path = os.path.join(path, "overview_pictures", f"{nd_psu[i]}_"+ os.path.basename(photo)+f"_{no_dominant_photos_detail_label[i]}.jpg")
         if not os.path.exists(local_path):
             sftp.get(photo, local_path)
 
     for photo in tqdm(mixed_dominant_photos_overview, desc="Taking overview pictures- Say Cheese! 🧀", unit="photo"):
         i = mixed_dominant_photos_overview.index(photo)
-        local_path = os.path.join(path, "overview_pictures", os.path.basename(photo)+f"_{mixed_dominant_photos_label[i]}.jpg")
+        local_path = os.path.join(path, "overview_pictures", f"{md_psu[i]}_" + os.path.basename(photo)+f"_{mixed_dominant_photos_label[i]}.jpg")
+        if not os.path.exists(local_path):
+            sftp.get(photo, local_path)
+
+    for photo in tqdm(crops_all_detail, desc="Taking pictures of all crops- Say Cheese! 🧀", unit="photo"):
+        i = crops_all_detail.index(photo)
+        local_path = os.path.join(path, "all_crops_photos", f"{all_psu[i]}_"+ os.path.basename(photo)+f"_{crops_all_detail_label[i]}.jpg")
+        if not os.path.exists(local_path):
+            sftp.get(photo, local_path)
+
+    for photo in tqdm(mixed_dominant_photos_overview, desc="Taking overview pictures- Say Cheese! 🧀", unit="photo"):
+        i = mixed_dominant_photos_overview.index(photo)
+        local_path = os.path.join(path, "overview_pictures", f"{all_psu[i]}_"+ os.path.basename(photo)+f"_{crops_all_detail_label[i]}.jpg")
         if not os.path.exists(local_path):
             sftp.get(photo, local_path)
 
     sftp.close()
+    
 finally:
     client.close()
