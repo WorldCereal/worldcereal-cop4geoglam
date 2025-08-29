@@ -22,7 +22,6 @@ from worldcereal.parameters import (
     CropTypeParameters,
     FeaturesParameters,
     PostprocessParameters,
-    PrestoFeatureExtractor,
 )
 
 from worldcereal_cop4geoglam.constants import PRODUCTION_MODELS_URLS
@@ -134,8 +133,8 @@ def create_worldcereal_inferencejob(
     # Submit the job
     job_options = {
         "driver-memory": "4g",
-        "executor-memory": "2g",
-        "executor-memoryOverhead": "1g",
+        "executor-memory": "1g",
+        "executor-memoryOverhead": "2g",
         "python-memory": "3g",
         "soft-errors": 0.1,
         "image-name": "python311",
@@ -193,7 +192,7 @@ if __name__ == "__main__":
     # Flexible parameters
     country = "moldova"
     output_folder = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/PSU_test_with_cropland_mask/raw"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/PSU_test_27082025/raw"
     )
     epsg = 32635
     parallel_jobs = 15
@@ -202,8 +201,8 @@ if __name__ == "__main__":
     )
     debug = False  # Triggers a selection of tiles
     s1_orbit_state = "DESCENDING"  # If None, it will be automatically determined but we want it fixed here.
-    start_date = "2024-10-01"
-    end_date = "2025-09-30"
+    start_date = "2024-09-01"
+    end_date = "2025-08-31"
     production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MDA_PSU_with_psu_name.parquet"
     restart_failed = True  # If True, it will restart failed jobs
     # ------------------------
@@ -275,7 +274,6 @@ if __name__ == "__main__":
     )
 
     cropland_parameters = CropLandParameters(
-        feature_extractor=PrestoFeatureExtractor,
         feature_parameters=feature_parameters_cropland,
         classifier_parameters=classifier_parameters_cropland,
     )
