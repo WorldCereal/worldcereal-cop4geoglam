@@ -94,7 +94,7 @@ def main(args):
     #     masking_info = "no-masking"
 
     experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
-    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/{experiment_name}"
+    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{experiment_name}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     CLASS_MAPPINGS = get_class_mappings(country)
@@ -407,18 +407,19 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "august_extractions",
+        "croptype-landcover",
         "--timestep_freq",
         "month",
         "--country",
         "moldova",
-        "--augment",
+        # "--augment",
         "--finetune_classes",
         # "LANDCOVER10",
-        "CROPTYPE_Moldova",
-        # "--use_balancing",
+        # "CROPTYPE_Moldova",
+        "CROPTYPE_LANDCOVER_Moldova",
+        "--use_balancing",
         "--val_samples_file",
-        "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/val_ids_moldova.csv",
+        "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/val_ids_moldova_qgis.csv",
         # "--debug",
         # "--masking_train_mode",
         # "random",

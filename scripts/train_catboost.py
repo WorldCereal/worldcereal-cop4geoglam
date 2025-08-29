@@ -791,33 +791,33 @@ def main() -> None:
     # =============================================================================
     USE_MANUAL_CONFIG = True
 
-    # # for cropland
-    # balance = True
-    # country = "moldova"
-    # modelversion = "100-MDA"
-    # finetune_classes = "LANDCOVER10"
-    # detector = "cropland"
-    # presto_model_name = "presto-prometheo-cop4geoglam-controlled_extractions-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202508261206"
-    # downstream_classes = {
-    #     "temporary_crops": "cropland",
-    #     "temporary_grasses": "other",
-    #     "permanent_crops": "cropland",
-    #     "grasslands": "other",
-    #     "wetlands": "other",
-    #     "shrubland": "other",
-    #     "trees": "other",
-    #     "built_up": "other",
-    #     "water": "other",
-    # }
-
-    # for croptype
-    balance = True
+    # for cropland
+    balance = False
     country = "moldova"
     modelversion = "100-MDA"
-    finetune_classes = "CROPTYPE_Moldova"
-    detector = "croptype"
-    presto_model_name = "presto-prometheo-cop4geoglam-new_val_ids-month-CROPTYPE_Moldova-augment=False-balance=True-timeexplicit=False-run=202508271333"
-    downstream_classes = None
+    finetune_classes = "LANDCOVER10"
+    detector = "cropland"
+    presto_model_name = "presto-prometheo-cop4geoglam-new_val_ids-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202508271322"
+    downstream_classes = {
+        "temporary_crops": "cropland",
+        "temporary_grasses": "other",
+        "permanent_crops": "cropland",
+        "grasslands": "other",
+        "wetlands": "other",
+        "shrubland": "other",
+        "trees": "other",
+        "built_up": "other",
+        "water": "other",
+    }
+
+    # # for croptype
+    # balance = False
+    # country = "moldova"
+    # modelversion = "100-MDA"
+    # finetune_classes = "CROPTYPE_Moldova"
+    # detector = "croptype"
+    # presto_model_name = "presto-prometheo-cop4geoglam-new_val_ids-month-CROPTYPE_Moldova-augment=False-balance=True-timeexplicit=False-run=202508271333"
+    # downstream_classes = None
 
     # set up paths and filenames
     presto_run_tag = presto_model_name.split("-")[-1]
