@@ -110,6 +110,7 @@ def create_worldcereal_inferencejob(
     provider,
     connection_provider,
     epsg: int = 4326,
+    product_type=WorldCerealProductType.CROPTYPE,
     cropland_parameters=None,
     croptype_parameters=None,
     postprocess_parameters=None,
@@ -122,7 +123,7 @@ def create_worldcereal_inferencejob(
     inference_result = create_inference_process_graph(
         spatial_extent=spatial_extent,
         temporal_extent=temporal_extent,
-        product_type=WorldCerealProductType.CROPTYPE,
+        product_type=product_type,
         cropland_parameters=cropland_parameters,
         croptype_parameters=croptype_parameters,
         postprocess_parameters=postprocess_parameters,
@@ -194,13 +195,13 @@ if __name__ == "__main__":
     output_folder = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/PSU_test_27082025/raw"
     )
+    product_type = WorldCerealProductType.CROPTYPE
     epsg = 32635
     parallel_jobs = 15
     randomize_production_grid = (
-        True  # If True, it will randomly select tiles from the production grid
+        False  # If True, it will randomly select tiles from the production grid
     )
     debug = False  # Triggers a selection of tiles
-    s1_orbit_state = "DESCENDING"  # If None, it will be automatically determined but we want it fixed here.
     start_date = "2024-09-01"
     end_date = "2025-08-31"
     production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MDA_PSU_with_psu_name.parquet"
@@ -287,10 +288,10 @@ if __name__ == "__main__":
     )
 
     # No postprocessing for the production run as we do this afterwards
-    postprocess_parameters = PostprocessParameters(enable=True,
-                                                   method="majority_vote", # to address spure predictions
-                                                   save_intermediate=True # saves not postprocessed
-                                                   )
+    postprocess_parameters = PostprocessParameters(
+        enable=True,
+        save_intermediate=True,  # saves not postprocessed
+    )
     # Retry loop starts here
     attempt = 0
     while True:
@@ -309,10 +310,10 @@ if __name__ == "__main__":
                 start_job=partial(
                     create_worldcereal_inferencejob,
                     epsg=epsg,
+                    product_type=product_type,
                     cropland_parameters=cropland_parameters,
                     croptype_parameters=croptype_parameters,
                     postprocess_parameters=postprocess_parameters,
-                    s1_orbit_state=s1_orbit_state,
                     target_epsg=epsg,
                 ),
                 job_db=job_tracking_csv,
