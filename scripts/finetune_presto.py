@@ -31,14 +31,14 @@ from worldcereal_cop4geoglam.finetuning_utils import (
 )
 
 
-def get_parquet_file_list(timestep_freq: Literal["month", "dekad"] = "dekad", country: str = "moldova"):
+def get_parquet_file_list(
+    timestep_freq: Literal["month", "dekad"] = "dekad", country: str = "moldova"
+):
     if country.lower() in COUNTRY_PARQUET_FILES:
         if timestep_freq in COUNTRY_PARQUET_FILES[country.lower()]:
             parquet_files = COUNTRY_PARQUET_FILES[country.lower()][timestep_freq]
             if parquet_files == []:
-                raise FileNotFoundError(
-                    f"No parquet files found for {country}"
-                )
+                raise FileNotFoundError(f"No parquet files found for {country}")
         else:
             raise ValueError(
                 f"Timestep frequency {timestep_freq} not supported for country {country}. "
@@ -65,6 +65,7 @@ def main(args):
     # Path to the training data
     parquet_files = get_parquet_file_list(timestep_freq=timestep_freq, country=country)
     val_samples_file = args.val_samples_file  # If None, random split is used
+    test_samples_file = args.test_samples_file  # If None, random split is used
 
     finetune_classes = args.finetune_classes
     augment = args.augment
@@ -78,23 +79,13 @@ def main(args):
     # ± timesteps to expand around label pos (true or moved), for time_explicit only; will only be set for training
     label_window = args.label_window
 
-    # # In-season masking parameters
-    # masking_strategy_train = args.masking_strategy_train
-    # masking_strategy_val = args.masking_strategy_val
-
     # Experiment signature
     timestamp_ind = datetime.now().strftime("%Y%m%d%H%M")
 
-    # # Update experiment name to include masking info
-    # if masking_strategy_train.mode == "random":
-    #     masking_info = f"random-masked-from-{masking_strategy_train.from_position}"
-    # elif masking_strategy_train.mode == "fixed":
-    #     masking_info = f"masked-from-{masking_strategy_train.from_position}"
-    # else:
-    #     masking_info = "no-masking"
-
     experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
-    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{experiment_name}"
+    output_dir = (
+        f"/projects/TAP/worldcereal/COP4GEOGLAM/{country}/models/{experiment_name}"
+    )
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     CLASS_MAPPINGS = get_class_mappings(country)
@@ -111,14 +102,19 @@ def main(args):
     else:
         pretrained_model_path = PRESTO_PRETRAINED_MODEL_PATH["DEFAULT"]
         pretrained_model_tag = "DEFAULT"
-        logger.info(f"No pretrained model for Finetune classes {finetune_classes}. "
-                    f"Supported classes are 'LANDCOVER' and 'CROPTYPE'. "
-                    f"Loading default WorldCereal pretrained model: {pretrained_model_path}")
+        logger.info(
+            f"No pretrained model for Finetune classes {finetune_classes}. "
+            f"Supported classes are 'LANDCOVER' and 'CROPTYPE'. "
+            f"Loading default WorldCereal pretrained model: {pretrained_model_path}"
+        )
 
     epochs = 100
-    batch_size = 256
-    patience = 6
+    batch_size = (
+        256  # For small datasets we need to keep this small to avoid overfitting!
+    )
+    patience = 10
     num_workers = 2
+    unfreeze_epoch = 30  # Epoch to start unfreezing layers gradually
 
     # ------------------------------------------
 
@@ -136,6 +132,7 @@ def main(args):
         finetune_classes=finetune_classes,
         class_mappings=CLASS_MAPPINGS,
         val_samples_file=val_samples_file,
+        test_samples_file=test_samples_file,
         debug=debug,
     )
 
@@ -166,6 +163,11 @@ def main(args):
             f"Dataset contains the following classes: {train_df.finetune_class.unique()}."
         )
 
+    logger.info(f"Task type: {task_type}, num_outputs: {num_outputs}")
+    logger.info(f"Number of training samples: {len(train_df)}")
+    logger.info(f"Number of validation samples: {len(val_df)}")
+    logger.info(f"Number of test samples: {len(test_df)}")
+
     # Use type casting to specify to mypy that task_type is a valid Literal value
     task_type_literal: Literal["binary", "multiclass"] = task_type  # type: ignore
 
@@ -181,8 +183,6 @@ def main(args):
         task_type=task_type_literal,
         num_outputs=num_outputs,
         classes_list=classes_list,
-        # masking_strategy_train=masking_strategy_train,
-        # masking_strategy_val=masking_strategy_val,
         label_jitter=label_jitter,
         label_window=label_window,
     )
@@ -221,23 +221,30 @@ def main(args):
         num_workers=num_workers,
     )
 
-    warmup_epochs = 5
+    # Set the optimizer with layer-wise lr decay
     parameters = param_groups_lrd(model)
-    optimizer = AdamW(parameters, lr=2e-4)
+    optimizer = AdamW(parameters, lr=1e-4)
 
-    # the learning rate of the warmup scheduler starts at LR x 1e-3
-    # and increases up to the LR of the optimizer
-    warmup_scheduler = lr_scheduler.LinearLR(optimizer, start_factor=1e-3, end_factor=1, total_iters=warmup_epochs)
-    decay_scheduler  = lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+    # # Define constant learning rate scheduler for the first few epochs
+    # constant_lr_scheduler = lr_scheduler.ConstantLR(
+    #     optimizer, factor=1.0, total_iters=unfreeze_epoch
+    # )
 
-    # combine the warmup and decay schedulers
-    # This will first apply the warmup for the specified number of epochs,
-    # then switch to the decay scheduler
-    scheduler = lr_scheduler.SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, decay_scheduler],
-        milestones=[warmup_epochs],
+    # # Define decay scheduler for the rest of the training
+    # decay_scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+
+    # # Make a scheduler that first does constant LR, then decay
+    # scheduler = lr_scheduler.SequentialLR(
+    #     optimizer,
+    #     schedulers=[constant_lr_scheduler, decay_scheduler],
+    #     milestones=[unfreeze_epoch],
+    # )
+
+    # ReduceLROnPlateau
+    reduce_lr_on_plateau_scheduler = lr_scheduler.ReduceLROnPlateau(
+        optimizer, patience=3
     )
+    scheduler = reduce_lr_on_plateau_scheduler
 
     # Setup dataloaders
     generator = torch.Generator()
@@ -252,7 +259,6 @@ def main(args):
                 generator=generator,
                 sampling_class="finetune_class",
                 method="log",
-                clip_range=(0.2, 10),
             )
             if use_balancing
             else None
@@ -281,6 +287,8 @@ def main(args):
         scheduler=scheduler,
         hyperparams=hyperparams,
         setup_logging=False,  # Already setup logging
+        freeze_layers=args.freeze_layers,  # Pass freeze layers
+        unfreeze_epoch=unfreeze_epoch,  # Pass unfreeze epoch
     )
 
     # Evaluate the finetuned model
@@ -362,6 +370,12 @@ def parse_args(arg_list=None):
         default=None,
         help="Path to a CSV with val sample IDs. If not set, a random split will be used.",
     )
+    parser.add_argument(
+        "--test_samples_file",
+        type=str,
+        default=None,
+        help="Path to a CSV with test sample IDs. If not set, a random split will be used.",
+    )
 
     # Task setup
     parser.add_argument("--finetune_classes", type=str, default="LANDCOVER14")
@@ -374,32 +388,17 @@ def parse_args(arg_list=None):
     parser.add_argument("--label_jitter", type=int, default=0)
     parser.add_argument("--label_window", type=int, default=0)
 
-    # # Masking strategy
-    # parser.add_argument(
-    #     "--masking_train_mode",
-    #     type=str,
-    #     choices=["none", "fixed", "random"],
-    #     default="random",
-    # )
-    # parser.add_argument("--masking_train_from", type=int, default=5)
+    # Add argument for layer freezing
+    parser.add_argument(
+        "--freeze_layers",
+        type=str,
+        nargs="*",
+        default=[],
+        help="List of layer names or patterns to freeze during training.",
+    )
 
-    # parser.add_argument(
-    #     "--masking_val_mode",
-    #     type=str,
-    #     choices=["none", "fixed", "random"],
-    #     default="fixed",
-    # )
-    # parser.add_argument("--masking_val_from", type=int, default=6)
 
     args = parser.parse_args(arg_list)
-
-    # # Compose masking strategy objects
-    # args.masking_strategy_train = MaskingStrategy(
-    #     mode=args.masking_train_mode, from_position=args.masking_train_from
-    # )
-    # args.masking_strategy_val = MaskingStrategy(
-    #     mode=args.masking_val_mode, from_position=args.masking_val_from
-    # )
 
     return args
 
@@ -407,28 +406,20 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "croptype-landcover",
+        "run-with-AL-and-freezing",
         "--timestep_freq",
         "month",
         "--country",
         "moldova",
         # "--augment",
         "--finetune_classes",
-        # "LANDCOVER10",
-        # "CROPTYPE_Moldova",
-        "CROPTYPE_LANDCOVER_Moldova",
+        "LANDCOVER10",
         "--use_balancing",
-        "--val_samples_file",
-        "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/val_ids_moldova_qgis.csv",
+        "--freeze_layers",
+        "encoder",
+        "--test_samples_file",
+        "/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/validation_ids/val_ids_moldova.csv",
         # "--debug",
-        # "--masking_train_mode",
-        # "random",
-        # "--masking_train_from",
-        # "15",
-        # "--masking_val_mode",
-        # "fixed",
-        # "--masking_val_from",
-        # "18",
     ]
     # manual_args = None
 
