@@ -367,9 +367,16 @@ class PrestoEmbeddingTrainer:
                 self.downstream_classes.keys()
             )
             if missing_classes:
-                raise ValueError(
-                    f"Downstream mapping missing for classes: {missing_classes}"
+                logger.warning(
+                    f"Some classes are missing in the downstream mapping and will be removed: {missing_classes}. "
+                    f"A total of {(train_val_df['finetune_class'].isin(missing_classes)).sum()} samples will be removed from the training data."
                 )
+
+            # Remove samples with missing classes from the dataframes
+            train_val_df = train_val_df[
+                ~train_val_df["finetune_class"].isin(missing_classes)
+            ]
+            tst_df = tst_df[~tst_df["finetune_class"].isin(missing_classes)]
 
             # Apply mapping to all dataframes
             train_val_df["downstream_class"] = train_val_df["finetune_class"].map(
@@ -791,13 +798,13 @@ def main() -> None:
     # =============================================================================
     USE_MANUAL_CONFIG = True
 
-    # for cropland
+    # for croptype
     balance = False
     country = "moldova"
-    modelversion = "100-MDA"
+    modelversion = "120-MDA"
     finetune_classes = "LANDCOVER10"
     detector = "cropland"
-    presto_model_name = "presto-prometheo-cop4geoglam-new_val_ids-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202508271322"
+    presto_model_name = "presto-prometheo-cop4geoglam-run-with-AL-and-freezing-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202509111120"
     downstream_classes = {
         "temporary_crops": "cropland",
         "temporary_grasses": "other",
@@ -809,22 +816,18 @@ def main() -> None:
         "built_up": "other",
         "water": "other",
     }
-
-    # # for croptype
-    # balance = False
-    # country = "moldova"
-    # modelversion = "100-MDA"
-    # finetune_classes = "CROPTYPE_Moldova"
-    # detector = "croptype"
-    # presto_model_name = "presto-prometheo-cop4geoglam-new_val_ids-month-CROPTYPE_Moldova-augment=False-balance=True-timeexplicit=False-run=202508271333"
     # downstream_classes = None
 
     # set up paths and filenames
     presto_run_tag = presto_model_name.split("-")[-1]
     cb_model_name = f"Presto_{presto_run_tag}_DownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
-    presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{presto_model_name}/{presto_model_name}.pt"
-    data_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/{presto_model_name}/"
-    output_dir = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/{detector}/{cb_model_name}"
+    presto_model_path = f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{presto_model_name}/{presto_model_name}.pt"
+    data_dir = (
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{presto_model_name}/"
+    )
+    output_dir = (
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{detector}/{cb_model_name}"
+    )
 
     if USE_MANUAL_CONFIG:
         # Manual configuration - edit these values as needed
