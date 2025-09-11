@@ -1,8 +1,8 @@
 from typing import Dict, List
 
 PRESTO_PRETRAINED_MODEL_PATH: Dict[str, str] = {
-    "LANDCOVER": "/vitodata/worldcereal/models/WorldCerealPresto/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930_encoder.pt",
-    "CROPTYPE": "/vitodata/worldcereal/models/WorldCerealPresto/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013_encoder.pt",
+    "LANDCOVER": "/projects/worldcereal/COP4GEOGLAM/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930_encoder.pt",
+    "CROPTYPE": "/projects/worldcereal/COP4GEOGLAM/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013_encoder.pt",
     "DEFAULT": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/models/PhaseII/presto-ss-wc_longparquet_random-window-cut_no-time-token_epoch96.pt",
 }
 
@@ -16,8 +16,7 @@ COUNTRY_PARQUET_FILES: Dict[str, Dict[str, List[str]]] = {
     },
     "moldova": {
         "month": [
-            # "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions.parquet"
-            "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/MDA_extractions_2024-09-01_2025-08-31_controlled.parquet"
+            "/projects/worldcereal/COP4GEOGLAM/moldova/worldcereal_merged_extractions.parquet"
         ],
         "dekad": [],
     },
