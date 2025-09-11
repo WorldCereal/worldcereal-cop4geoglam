@@ -432,7 +432,7 @@ class PrestoEmbeddingTrainer:
             class_weights = get_class_weights(
                 train_val_df[self.target_column].values,
                 method="log",
-                clip_range=(0.2, 10),
+                # clip_range=(0.2, 20),
                 normalize=True,
             )
 
