@@ -34,6 +34,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
+from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from worldcereal.utils.refdata import map_classes
@@ -81,8 +82,10 @@ class PrestoEmbeddingTrainer:
         num_workers: int = 8,
         modelversion: str = "001",
         detector: str = "cropland",
-        country: str = "Moldova",
+        country: str = "moldova",
         downstream_classes: Optional[dict] = None,
+        balance: bool = True,
+        cb_model_name: str = "PrestoDownstreamCatBoost",
     ):
         self.presto_model_path = Path(presto_model_path)
         self.data_dir = Path(data_dir)
@@ -95,6 +98,8 @@ class PrestoEmbeddingTrainer:
         self.detector = detector
         self.country = country
         self.downstream_classes = downstream_classes
+        self.balance = balance
+        self.cb_model_name = cb_model_name
 
         # Determine if binary classification based on downstream_classes
         if self.downstream_classes is not None:
@@ -201,7 +206,7 @@ class PrestoEmbeddingTrainer:
             task_type="multiclass",
             num_outputs=len(orig_classes),
             classes_list=orig_classes,
-            augment=True,
+            augment=False,
             return_sample_id=True,
         )
         val_ds = Cop4GeoLabelledDataset(
@@ -279,7 +284,9 @@ class PrestoEmbeddingTrainer:
             logger.info("No pre-computed embeddings found, computing them ...")
             return self._compute_embeddings()
 
-    def _setup_model(self) -> CatBoostClassifier:
+    def _setup_model(
+        self, iterations=6000, early_stopping_rounds=25
+    ) -> CatBoostClassifier:
         """Setup the CatBoost model."""
         logger.info("Setting up CatBoost model...")
 
@@ -292,12 +299,12 @@ class PrestoEmbeddingTrainer:
             eval_metric = "MultiClass"
 
         model = CatBoostClassifier(
-            iterations=6000,
+            iterations=iterations,
             depth=6,
             learning_rate=0.05,
             loss_function=loss_function,
             eval_metric=eval_metric,
-            early_stopping_rounds=25,
+            early_stopping_rounds=early_stopping_rounds,
             task_type="GPU" if torch.cuda.is_available() else "CPU",
             devices="0" if torch.cuda.is_available() else None,
             thread_count=4,
@@ -305,99 +312,50 @@ class PrestoEmbeddingTrainer:
             l2_leaf_reg=3,
             verbose=100,
             class_names=self.classes_list,
-            train_dir=self.output_dir,
+            train_dir=str(self.output_dir),
         )
 
         # Save model parameters to config
         model_params = model.get_params()
-        model_params["train_dir"] = str(model_params["train_dir"])
+        model_params["train_dir"] = model_params["train_dir"]
         self.config["model_params"] = model_params
         self.save_config()
         logger.info(f"Model parameters: {model_params}")
 
         return model
 
-    def _prepare_training_data(
-        self, trn_df: pd.DataFrame, val_df: pd.DataFrame, tst_df: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        """Prepare training data with weights and feature selection."""
-        # Get feature columns
-        feat_cols = [c for c in trn_df.columns if c.startswith("emb_")]
-        self.feat_cols = feat_cols
-
-        # Calculate class weights
-        logger.info("Calculating class weights...")
-        class_weights = get_class_weights(
-            trn_df[self.target_column].values,
-            method="log",
-            clip_range=(0.2, 10),
-            normalize=True,
-        )
-
-        # Apply sample weights
-        sample_weights = np.ones_like(
-            trn_df[self.target_column].values, dtype=np.float32
-        )
-        for k, v in class_weights.items():
-            sample_weights[trn_df[self.target_column].values == k] = v
-        trn_df["weight"] = sample_weights
-        val_df["weight"] = 1.0  # Validation weights are uniform
-        tst_df["weight"] = 1.0  # Test weights are uniform
-
-        # Add label column using target column
-        trn_df["label"] = trn_df[self.target_column]
-        val_df["label"] = val_df[self.target_column]
-        tst_df["label"] = tst_df[self.target_column]
-
-        # Save class information to config
-        self.config["classes"] = {
-            str(i): str(cls) for i, cls in enumerate(self.classes_list)
-        }
-        self.config["class_weights"] = {
-            str(k): float(v) for k, v in class_weights.items()
-        }
-        self.save_config()
-
-        return trn_df, val_df, tst_df
-
-    def _setup_datapools(
-        self, cal_data: pd.DataFrame, val_data: pd.DataFrame
-    ) -> tuple[Pool, Pool]:
-        """Setup CatBoost data pools."""
-        calibration_pool = Pool(
-            data=cal_data[self.feat_cols],
-            label=cal_data["label"],
-            weight=cal_data["weight"],
-        )
-        eval_pool = Pool(
-            data=val_data[self.feat_cols],
-            label=val_data["label"],
-            weight=val_data["weight"],
-        )
-        return calibration_pool, eval_pool
-
     def train(self) -> CatBoostClassifier:
         """Train the CatBoost model."""
         # Get training data
         trn_df, val_df, tst_df = self._get_training_data()
 
-        # Map classes
+        # Merge train and validation data for cross-validation
+        logger.info("Merging train and validation data for cross-validation...")
+        train_val_df = pd.concat([trn_df, val_df], ignore_index=True)
+
+        # Map classes for the merged training data and the test data
         logger.info("Mapping classes...")
-        trn_df = map_classes(trn_df, finetune_classes=self.finetune_classes, class_mappings=get_class_mappings(self.country))
-        val_df = map_classes(val_df, finetune_classes=self.finetune_classes, class_mappings=get_class_mappings(self.country))
-        tst_df = map_classes(tst_df, finetune_classes=self.finetune_classes, class_mappings=get_class_mappings(self.country))
+        train_val_df = map_classes(
+            train_val_df,
+            finetune_classes=self.finetune_classes,
+            class_mappings=get_class_mappings(self.country),
+        )
+        tst_df = map_classes(
+            tst_df,
+            finetune_classes=self.finetune_classes,
+            class_mappings=get_class_mappings(self.country),
+        )
 
         # Save class list
-        self.classes_list = sorted(trn_df["finetune_class"].unique())
+        self.classes_list = sorted(train_val_df["finetune_class"].unique())
         logger.info(f"Classes after mapping: {self.classes_list}")
 
         # Remove samples to be ignored
-        trn_df = trn_df[trn_df["finetune_class"] != "remove"]
-        val_df = val_df[val_df["finetune_class"] != "remove"]
+        train_val_df = train_val_df[train_val_df["finetune_class"] != "remove"]
         tst_df = tst_df[tst_df["finetune_class"] != "remove"]
 
         # Update class list after removing samples
-        self.classes_list = sorted(trn_df["finetune_class"].unique())
+        self.classes_list = sorted(train_val_df["finetune_class"].unique())
         logger.info(f"Final classes: {self.classes_list}")
 
         # Apply downstream class mapping (default to identity mapping if not specified)
@@ -409,15 +367,19 @@ class PrestoEmbeddingTrainer:
                 self.downstream_classes.keys()
             )
             if missing_classes:
-                raise ValueError(
-                    f"Downstream mapping missing for classes: {missing_classes}"
+                logger.warning(
+                    f"Some classes are missing in the downstream mapping and will be removed: {missing_classes}. "
+                    f"A total of {(train_val_df['finetune_class'].isin(missing_classes)).sum()} samples will be removed from the training data."
                 )
 
+            # Remove samples with missing classes from the dataframes
+            train_val_df = train_val_df[
+                ~train_val_df["finetune_class"].isin(missing_classes)
+            ]
+            tst_df = tst_df[~tst_df["finetune_class"].isin(missing_classes)]
+
             # Apply mapping to all dataframes
-            trn_df["downstream_class"] = trn_df["finetune_class"].map(
-                self.downstream_classes
-            )
-            val_df["downstream_class"] = val_df["finetune_class"].map(
+            train_val_df["downstream_class"] = train_val_df["finetune_class"].map(
                 self.downstream_classes
             )
             tst_df["downstream_class"] = tst_df["finetune_class"].map(
@@ -425,7 +387,7 @@ class PrestoEmbeddingTrainer:
             )
 
             # Update classes list to downstream classes
-            self.classes_list = sorted(trn_df["downstream_class"].unique())
+            self.classes_list = sorted(train_val_df["downstream_class"].unique())
             logger.info(f"Classes after downstream mapping: {self.classes_list}")
 
             # Set the target column for training
@@ -436,8 +398,7 @@ class PrestoEmbeddingTrainer:
                 "No downstream_classes specified, using finetune_classes directly"
             )
             self.downstream_classes = {cls: cls for cls in self.classes_list}
-            trn_df["downstream_class"] = trn_df["finetune_class"]
-            val_df["downstream_class"] = val_df["finetune_class"]
+            train_val_df["downstream_class"] = train_val_df["finetune_class"]
             tst_df["downstream_class"] = tst_df["finetune_class"]
             logger.info(f"Using classes: {self.classes_list}")
 
@@ -468,8 +429,44 @@ class PrestoEmbeddingTrainer:
                 f"Multiclass classification with {len(self.classes_list)} classes: {self.classes_list}"
             )
 
-        # Prepare data
-        trn_df, val_df, tst_df = self._prepare_training_data(trn_df, val_df, tst_df)
+        # Get feature columns
+        feat_cols = [c for c in train_val_df.columns if c.startswith("emb_")]
+        self.feat_cols = feat_cols
+
+        if self.balance:
+            # Calculate class weights
+            logger.info("Calculating class weights...")
+            class_weights = get_class_weights(
+                train_val_df[self.target_column].values,
+                method="log",
+                # clip_range=(0.2, 20),
+                normalize=True,
+            )
+
+            # Apply sample weights
+            sample_weights = np.ones_like(
+                train_val_df[self.target_column].values, dtype=np.float32
+            )
+            for k, v in class_weights.items():
+                sample_weights[train_val_df[self.target_column].values == k] = v
+            train_val_df["weight"] = sample_weights
+        else:
+            class_weights = {cls: 1.0 for cls in self.classes_list}
+            train_val_df["weight"] = 1.0  # Uniform weights for all samples
+
+        # Add label column using target column
+        train_val_df["label"] = train_val_df[self.target_column]
+        tst_df["label"] = tst_df[self.target_column]
+
+        # Save class information to config
+        self.config["classes"] = {
+            str(i): str(cls) for i, cls in enumerate(self.classes_list)
+        }
+        self.config["class_weights"] = {
+            str(k): float(v) for k, v in class_weights.items()
+        }
+        self.config["balance"] = self.balance
+        self.save_config()
 
         # Update config with final class information
         self.config["final_classes"] = self.classes_list
@@ -479,45 +476,76 @@ class PrestoEmbeddingTrainer:
 
         # Save processed data
         logger.info("Saving processed data...")
-        trn_df.to_parquet(self.output_dir / "processed_calibration_df.parquet")
-        val_df.to_parquet(self.output_dir / "processed_validation_df.parquet")
+        train_val_df.to_parquet(self.output_dir / "processed_calibration_df.parquet")
         tst_df.to_parquet(self.output_dir / "processed_test_df.parquet")
 
-        # Setup model
-        model = self._setup_model()
+        # Perform manual cross-validation
+        num_folds = 5
+        best_iters = []
+        skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
 
-        # Setup data pools
-        calibration_pool, eval_pool = self._setup_datapools(trn_df, val_df)
+        # Extract features and labels
+        X = train_val_df[self.feat_cols].values
+        y = train_val_df[self.target_column].values
 
-        # Train model
-        logger.info("Starting training...")
-        model.fit(
-            calibration_pool,
-            eval_set=eval_pool,
+        # Setup a cross-validation model
+        cv_model = self._setup_model()
+
+        for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
+            logger.info(f"Training fold {fold + 1}/{num_folds}...")
+            cv_train_pool = Pool(
+                data=train_val_df[self.feat_cols].iloc[train_idx],
+                label=train_val_df["label"].iloc[train_idx],
+                weight=train_val_df["weight"].iloc[train_idx],
+            )
+
+            cv_val_pool = Pool(
+                data=train_val_df[self.feat_cols].iloc[val_idx],
+                label=train_val_df["label"].iloc[val_idx],
+                weight=train_val_df["weight"].iloc[val_idx],
+            )
+
+            cv_model.fit(cv_train_pool, eval_set=cv_val_pool)
+            best_iters.append(cv_model.best_iteration_)
+
+        final_iterations = int(np.median(best_iters))
+        logger.info(f"Optimal iterations determined from CV: {final_iterations}")
+
+        # Train the final model on the full training data
+        logger.info("Training the final model on the full training data...")
+        final_model = self._setup_model(
+            iterations=final_iterations, early_stopping_rounds=None
+        )
+        final_model.fit(
+            Pool(
+                data=train_val_df[self.feat_cols],
+                label=train_val_df["label"],
+                weight=train_val_df["weight"],
+            ),
+            verbose=100,
         )
 
         # Save model
-        self.save_model(model)
+        self.save_model(final_model)
 
         # Evaluate model
-        self.evaluate(model, tst_df)
+        self.evaluate(final_model, tst_df)
 
         # Plot feature importance
-        self._plot_feature_importance(model)
+        self._plot_feature_importance(final_model)
 
-        return model
+        return final_model
 
     def save_model(self, model: CatBoostClassifier) -> None:
         """Save model in both CBM and ONNX formats."""
-        modelname = f"PrestoDownstreamCatBoost_{self.detector}_v{self.modelversion}"
 
         # Save as CBM
-        cbm_path = self.output_dir / f"{modelname}.cbm"
+        cbm_path = self.output_dir / f"{self.cb_model_name}.cbm"
         model.save_model(cbm_path)
         logger.info(f"Model saved as CBM: {cbm_path}")
 
         # Save as ONNX
-        onnx_path = self.output_dir / f"{modelname}.onnx"
+        onnx_path = self.output_dir / f"{self.cb_model_name}.onnx"
         model.save_model(
             str(onnx_path),
             format="onnx",
@@ -543,7 +571,9 @@ class PrestoEmbeddingTrainer:
             true_labels, preds, output_dict=True, zero_division=0
         )
         report_df = pd.DataFrame(report).transpose()
-        report_df.to_csv(self.output_dir / "classification_report.csv")
+        report_df.to_csv(
+            self.output_dir / f"{self.cb_model_name}_classification_report.csv"
+        )
 
         # Confusion matrices
         self._plot_confusion_matrices(true_labels, preds)
@@ -552,7 +582,7 @@ class PrestoEmbeddingTrainer:
         metrics = self._calculate_metrics(true_labels, preds)
 
         # Save metrics
-        with open(self.output_dir / "metrics.txt", "w") as f:
+        with open(self.output_dir / f"{self.cb_model_name}_metrics.txt", "w") as f:
             f.write("Test results:\n")
             for key, value in metrics.items():
                 f.write(f"{key}: {value}\n")
@@ -574,7 +604,7 @@ class PrestoEmbeddingTrainer:
         cm.plot(ax=ax, cmap=plt.cm.Blues, colorbar=False)
         plt.setp(ax.get_xticklabels(), rotation=90, ha="center")
         plt.tight_layout()
-        plt.savefig(self.output_dir / "CM_abs.png")
+        plt.savefig(self.output_dir / f"{self.cb_model_name}_CM_abs.png")
         plt.close(fig)
 
         # Normalized confusion matrix
@@ -588,7 +618,7 @@ class PrestoEmbeddingTrainer:
             text.set_text(f"{val:.2f}")
         plt.setp(ax.get_xticklabels(), rotation=90, ha="center")
         plt.tight_layout()
-        plt.savefig(self.output_dir / "CM_norm.png")
+        plt.savefig(self.output_dir / f"{self.cb_model_name}_CM_norm.png")
         plt.close(fig)
 
     def _calculate_metrics(self, true_labels: np.ndarray, preds: np.ndarray) -> dict:
@@ -630,7 +660,7 @@ class PrestoEmbeddingTrainer:
         ax.bar(np.array(self.feat_cols)[sorting], np.array(ft_imp)[sorting])
         ax.set_xticklabels(np.array(self.feat_cols)[sorting], rotation=90)
         plt.tight_layout()
-        plt.savefig(self.output_dir / "feature_importance.png")
+        plt.savefig(self.output_dir / f"{self.cb_model_name}_feature_importance.png")
         plt.close(f)
 
     def create_config(self) -> None:
@@ -653,7 +683,7 @@ class PrestoEmbeddingTrainer:
 
     def save_config(self) -> None:
         """Save configuration to JSON file."""
-        config_path = self.output_dir / "config.json"
+        config_path = self.output_dir / f"{self.cb_model_name}_config.json"
 
         # Convert any numpy types to Python native types
         def convert_numpy_types(obj):
@@ -721,6 +751,18 @@ def parse_args() -> argparse.Namespace:
         "--modelversion", type=str, default="001", help="Model version identifier"
     )
     parser.add_argument(
+        "--presto_model_name",
+        type=str,
+        default="presto-prometheo-cop4geoglam-august_extractions-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202508191053",
+        help="Presto model name",
+    )
+    parser.add_argument(
+        "--cb_model_name",
+        type=str,
+        default="PrestoDownstreamCatBoost_croptype_v100_MDA_balance=False",
+        help="CatBoost model name",
+    )
+    parser.add_argument(
         "--detector",
         type=str,
         default="cropland",
@@ -738,6 +780,12 @@ def parse_args() -> argparse.Namespace:
         default="Moldova",
         help="Country for which the model is being trained",
     )
+    parser.add_argument(
+        "--balance",
+        type=bool,
+        default=False,
+        help="Whether to balance the dataset",
+    )
     return parser.parse_args()
 
 
@@ -750,12 +798,13 @@ def main() -> None:
     # =============================================================================
     USE_MANUAL_CONFIG = True
 
-    # for cropland
-    presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130.pt"
-    data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507241130/"
-    output_dir = "./CROPLAND"
+    # for croptype
+    balance = False
+    country = "moldova"
+    modelversion = "120-MDA"
     finetune_classes = "LANDCOVER10"
     detector = "cropland"
+    presto_model_name = "presto-prometheo-cop4geoglam-run-with-AL-and-freezing-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202509111120"
     downstream_classes = {
         "temporary_crops": "cropland",
         "temporary_grasses": "other",
@@ -767,16 +816,18 @@ def main() -> None:
         "built_up": "other",
         "water": "other",
     }
-    country = "Moldova_prelim"
-
-    # # for croptype
-    # presto_model_path = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139.pt"
-    # data_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/models/presto-prometheo-cop4geoglam-test-run-pretrained-WC-FT-month-CROPTYPE_Moldova-augment=True-balance=True-timeexplicit=False-run=202507241139/"
-    # output_dir = "./CROPTYPE"
-    # finetune_classes = "CROPTYPE_Moldova"
-    # detector = "croptype"
     # downstream_classes = None
-    # country = "Moldova_prelim"
+
+    # set up paths and filenames
+    presto_run_tag = presto_model_name.split("-")[-1]
+    cb_model_name = f"Presto_{presto_run_tag}_DownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
+    presto_model_path = f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{presto_model_name}/{presto_model_name}.pt"
+    data_dir = (
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{presto_model_name}/"
+    )
+    output_dir = (
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{detector}/{cb_model_name}"
+    )
 
     if USE_MANUAL_CONFIG:
         # Manual configuration - edit these values as needed
@@ -789,15 +840,17 @@ def main() -> None:
                 self.timestep_freq = "month"
                 self.batch_size = 256
                 self.num_workers = 2
-                self.modelversion = "001-debug"
+                self.modelversion = modelversion
                 self.detector = detector
                 self.country = country
                 self.downstream_classes = downstream_classes
+                self.balance = balance
+                self.cb_model_name = cb_model_name
 
         args = ManualArgs()
         logger.info("Using manual configuration for debug mode")
     else:
-        args = parse_args() # type: ignore
+        args = parse_args()  # type: ignore
         logger.info("Using command line arguments")
 
         # Parse downstream_classes JSON string if provided
@@ -824,6 +877,8 @@ def main() -> None:
         detector=args.detector,
         downstream_classes=args.downstream_classes,
         country=args.country,
+        balance=args.balance,
+        cb_model_name=args.cb_model_name,
     )
 
     # Create initial config
