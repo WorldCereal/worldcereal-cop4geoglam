@@ -1,4 +1,5 @@
 import json
+import random
 import shutil
 import time
 from functools import partial
@@ -8,7 +9,6 @@ from typing import Optional
 import geopandas as gpd
 import openeo
 import pandas as pd
-import requests
 from dateutil.parser import parse  # type: ignore[import-untyped]
 from loguru import logger
 from openeo import BatchJob
@@ -28,15 +28,9 @@ from worldcereal_cop4geoglam.constants import PRODUCTION_MODELS_URLS
 
 ONNX_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/onnx_deps_python311.zip"
 FEATURE_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/torch_deps_python311.zip"
-RETRYABLE_CODES = {500, 502, 504}
-MAX_RETRIES = 5  # Maximum number of retries for HTTP errors
-
-
-def is_retryable_http(exc):
-    # adjust if CDSE raises a custom exception
-    if isinstance(exc, requests.HTTPError) and exc.response is not None:
-        return exc.response.status_code in RETRYABLE_CODES
-    return False
+MAX_RETRIES = 50
+BASE_DELAY = 0.1  # initial delay in seconds
+MAX_DELAY = 10
 
 
 class InferenceJobManager(MultiBackendJobManager):
@@ -193,7 +187,7 @@ if __name__ == "__main__":
     # Flexible parameters
     country = "moldova"
     output_folder = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/PSU_test_27082025/raw"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/V1_11092025/raw"
     )
     product_type = WorldCerealProductType.CROPTYPE
     epsg = 32635
@@ -204,7 +198,8 @@ if __name__ == "__main__":
     debug = False  # Triggers a selection of tiles
     start_date = "2024-09-01"
     end_date = "2025-08-31"
-    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MDA_PSU_with_psu_name.parquet"
+    # production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MDA_PSU_with_psu_name.parquet"
+    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/auxdata/moldova_blocks_20k.parquet"
     restart_failed = True  # If True, it will restart failed jobs
     # ------------------------
 
@@ -322,16 +317,19 @@ if __name__ == "__main__":
             break  # success: exit loop
 
         except Exception as exc:
-            # Only retry on HTTPError with 500/502/504
-            if is_retryable_http(exc) and attempt < MAX_RETRIES:
+            if attempt < MAX_RETRIES:
                 attempt += 1
-                delay = 2**attempt  # Exponential backoff
+                # Exponential backoff with full jitter, capped at MAX_DELAY seconds
+                backoff = min(BASE_DELAY * 2**attempt, MAX_DELAY)
+                jitter = random.uniform(
+                    -0.2 * backoff, 0.2 * backoff
+                )  # ±20% of backoff
+                delay = max(0, backoff + jitter)
                 logger.warning(
-                    f"Retryable HTTP error (code {exc.response.status_code}) on attempt "  # type: ignore
-                    f"{attempt}/{MAX_RETRIES}, retrying in {delay}s..."
+                    f"Attempt {attempt}/{MAX_RETRIES} failed: {exc}. Retrying in {delay:.1f}s..."
                 )
                 time.sleep(delay)
                 continue
             # Non-retryable or maxed-out
-            logger.error(f"Failed to submit jobs: {exc}")
-            raise  # re-raise the exception that caused failure to avoid infinite loop
+            logger.error(f"Max retries reached. Last error: {exc}")
+            raise
