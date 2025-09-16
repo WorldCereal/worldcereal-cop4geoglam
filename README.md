@@ -209,7 +209,25 @@ Copy the URLs to the models and report them in the `constants.py` script in the 
 
 ---
 
-### 7. `scripts/run_production.py`
+### 7. `scripts/run_inference_locally.py`
+**Purpose:**
+Run fast, iterative inference (cropland and croptype) on the preprocessed input tiles produced in Section 3, entirely locally (no new openEO jobs). Useful for: (a) validating new CatBoost / Presto model versions, (b) quick error analysis on a handful of PSUs, (c) comparing alternative downstream class mappings, (d) providing inspiration for active learning points.
+
+**Prerequisites:**
+- A folder of per‑tile preprocessed inputs (e.g. `/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/PSU_preprocessed_inputs/<tile_name>/*_inputs_<tile_name>.nc`).
+- Finetuned Presto model folder (export produced by `finetune_presto.py`).
+- Trained CatBoost model artifacts (ONNX) produced by `train_catboost.py` (or URLs listed in `PRODUCTION_MODELS_URLS`).
+- Matching class mapping JSON already available under `src/worldcereal_cop4geoglam/` (same key used during training).
+
+**What the script typically does:**
+1. Loads the Presto model to produce (or load cached) embeddings per tile/time step from the preprocessed inputs.
+2. Aggregates / flattens embeddings to the temporal representation expected by the CatBoost classifier.
+3. Applies CatBoost to generate per‑pixel probabilities / hard labels.
+4. Writes NetCDF outputs of the products.
+
+---
+
+### 8. `scripts/run_production.py`
 **Purpose:**  
 Submits large-scale inference jobs for crop type and cropland prediction using trained models.
 
