@@ -23,8 +23,9 @@ def get_class_mappings(country: str = "kenya") -> Dict:
     file_path = importlib.resources.files(data).joinpath(
         f"{country}/class_mappings_{country}.json"
     )
-    if not file_path.exists():
-        raise ValueError(
+    with importlib.resources.as_file(file_path) as actual_file_path:
+        if not actual_file_path.exists():
+            raise ValueError(
             f"Class mappings file `{file_path}` for country `{country}` does not exist."
         )
     with file_path.open("r") as f:
