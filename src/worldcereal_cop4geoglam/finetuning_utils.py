@@ -7,8 +7,7 @@ import pandas as pd
 import torch
 from prometheo.predictors import NODATAVALUE, Predictors
 
-from worldcereal_cop4geoglam.constants import COUNTRY_CLASS_MAPPINGS
-from worldcereal_cop4geoglam.data import croptype_mappings
+from worldcereal_cop4geoglam import data
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
 
 
@@ -20,9 +19,15 @@ def get_class_mappings(country: str = "kenya") -> Dict:
     Dict
         the resulting dictionary with the class mappings
     """
-    with importlib.resources.open_text(
-        croptype_mappings, f"class_mappings_{COUNTRY_CLASS_MAPPINGS[country]}.json"
-    ) as f:  # type: ignore
+
+    file_path = importlib.resources.files(data).joinpath(
+        f"{country}/class_mappings_{country}.json"
+    )
+    if not file_path.exists():
+        raise ValueError(
+            f"Class mappings file `{file_path}` for country `{country}` does not exist."
+        )
+    with file_path.open("r") as f:
         CLASS_MAPPINGS = json.load(f)
 
     return CLASS_MAPPINGS
