@@ -185,11 +185,11 @@ def parse_args(argv: Iterable[str]) -> argparse.Namespace:
     )
     p.add_argument("--output", help="Output GeoParquet (default: <input>_utm.parquet)")
 
-    return p.parse_args(argv)
+    return p.parse_args(argv)  # type: ignore
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    ns = parse_args(list(argv) if argv is not None else sys.argv[1:])
+    ns = parse_args(argv if argv is not None else sys.argv[1:])
     in_path = Path(ns.input)
     out_path = (
         Path(ns.output)
