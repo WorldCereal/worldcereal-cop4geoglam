@@ -3,8 +3,116 @@
 This repository contains scripts for training and running crop type and cropland classification models using Presto embeddings and CatBoost classifiers, as well as for orchestrating large-scale production inference jobs.
 
 ## Script Overview
+### 0. Prerequisites
 
-### 1. `scripts/finetune_presto.py`
+Before running the scripts, ensure you have the following:
+
+- **Harmonized training points Parquet file:**
+  A Parquet file containing harmonized training points with labeled crop types or land cover classes. Expected to have the path `/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/harmonized/{year}_{country-abbreviation}_COPERNICUS4GEOGLAM_POINT_110.geoparquet`.
+
+- **PSU Parquet/GPKG File:**  
+  A file containing the geometry of PSUs and a unique identifier for each unit. Expected to have the path `/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/{country-abbreviation}_PSU.parquet`
+
+- **Production Grid for AOI (Area of Interest):**  
+  A 20k x 20k grid covering the area of interest.
+
+To make both compatible for running the openEO scripts, use the `convert_gdf_to_production_grid.py` script as follows:
+
+```sh
+python scripts/convert_gdf_to_production_grid.py \
+  --input path/to/input.geoparquet \
+  --output path/to/output_with_utm.parquet \
+  --id-source unique_id_name
+```
+
+This conversion script will convert processing geometries to UTM and add the EPSG codes to the GeoDataFrame.
+
+**Parameters:**
+- `--input`: Path to the input GeoParquet or GeoPackage file.
+- `--output`: Path to save the output production grid file with UTM projection. Should be be `/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/{country-abbreviation}_PSU_UTM.parquet`.
+- `--id-source`: Name of the unique identifier column in the input file.
+
+### 1. Optional augmentation of training data points
+- Active learning to draw additional points near known points. Make sure the nearest known point has the same label as the newly drawn ones. Afterwards, use QGIS's `Join attributes by nearest` to borrow the original attributes. Finally, use the field calculator tool to update the `sample_id` of the newly drawn points to be based on the original `sample_id`, and extend it by: `_AL_{fid}`.
+
+- Point expansion: ...
+
+### 2. Training data extractions
+This step creates the time‑series used to fine‑tune Presto (and later to derive embeddings for CatBoost). It wraps the generic WorldCereal extraction pipeline (`worldcereal-classification` repo) for a specific reference dataset (`ref_id`).
+
+Core script(s):
+- `scripts/extractions/extract_points.sh` (convenience wrapper you adapt per ref_id / country)
+- Upstream extractor: `worldcereal-classification/scripts/extractions/extract.py`
+
+Typical workflow:
+1. Prepare a harmonized reference samples GeoParquet (`{REF_ID}.geoparquet`) containing at least geometry and label columns, plus an `extract` flag (>= given threshold triggers extraction) if you want selective extraction.
+2. Create (or copy and modify) `extract_points.sh` and set:
+   - `REF_ID` (e.g. `2025_MDA_COPERNICUS4GEOGLAM_POINT_110`)
+   - `COUNTRY_DIR` root (e.g. `/vitodata/worldcereal/data/COP4GEOGLAM/moldova`)
+3. Ensure output folder path matches: `${COUNTRY_DIR}/trainingdata/${REF_ID}` (script checks the last folder equals `ref_id`).
+4. Run the shell script (optionally in a tmux/screen session) and monitor openEO job progress via backend UI or logs.
+
+Example minimal direct invocation (equivalent to what the bash wrapper does):
+```bash
+python /home/kristofvt/git/worldcereal-classification/scripts/extractions/extract.py \
+  POINT_WORLDCEREAL \
+  /vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/2025_MDA_COPERNICUS4GEOGLAM_POINT_110 \
+  /vitodata/worldcereal/data/COP4GEOGLAM/moldova/refdata/harmonized/2025_MDA_COPERNICUS4GEOGLAM_POINT_110.geoparquet \
+  --ref_id 2025_MDA_COPERNICUS4GEOGLAM_POINT_110 \
+  --python_memory 3000m \
+  --parallel_jobs 2 \
+  --max_locations 250 \
+  --restart_failed \
+  --extract_value 0
+```
+
+Outputs:
+- A job tracking CSV (created inside the extraction output folder) recording status per subset.
+- One GeoParquet per job consolidated under the `ref_id` directory.
+- A merged extractions GeoParquet for the entire ref_id.
+
+### 3. Preprocessed inputs extractions for PSUs
+This optional step generates standardized preprocessed input cubes (S1/S2 derived features, etc.) for every Primary Sampling Unit (PSU) tile. Running it allows to perform local model inference for quick iterations on model improvements.
+
+Core script: `scripts/run_collect_inputs.py`
+
+What it does:
+1. Reads a production grid parquet (one row per tile) that already contains per‑tile UTM geometry and EPSG.
+2. For each tile, builds an inputs process graph via `worldcereal.job.create_inputs_process_graph` (temporal + spatial subset, orbit state handling).
+3. Submits openEO batch jobs with resource options (driver/executor/python memory) and up to N parallel jobs.
+4. Writes per‑tile NetCDF (or similar) outputs into subfolders named after `tile_name` and stores job & result metadata JSON files.
+5. Maintains a persistent `job_tracking.csv` enabling restarts and failure recovery.
+
+Required production grid columns (validated):
+- `tile_name`
+- `geometry_utm_wkt` (polygon in target UTM)
+- `epsg_utm` (integer EPSG code matching geometry)
+
+Adjustable flexible parameters (top of the script):
+- `output_folder`: Root destination (e.g. `/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/PSU_preprocessed_inputs`).
+- `parallel_jobs`: Max concurrent openEO jobs (e.g. 20).
+- `randomize_production_grid`: Shuffle tiles to spread load/time windows.
+- `s1_orbit_state`: Fix to `ASCENDING` or `DESCENDING`; `None` lets logic auto‑determine both/optimal.
+- `start_date`, `end_date`: Temporal context of inputs (match model season/target year span).
+- `production_grid`: Path to PSU parquet produced earlier (see Section 0 conversion / grid generation).
+- `restart_failed`: If `True`, rows with status in `{error,start_failed}` are reset to `not_started` before resubmission.
+
+How to run (default in-place settings):
+```bash
+python scripts/run_collect_inputs.py
+```
+Edit the flexible parameter block first; or externalize via environment variables + small wrapper if managing multiple countries.
+
+Outputs per tile subfolder under `output_folder`:
+- One (or more) downloaded asset file(s) renamed to include `_<tile_name>.nc`.
+- `job_<jobid>.json` and `result_<jobid>.json` metadata for traceability.
+- A global `job_tracking.csv` in the root tracking statuses (`not_started`, `running`, `finished`, `error`).
+
+Tuning & best practices:
+- Keep `start_date`/`end_date` aligned with the model training temporal extent to avoid distribution shift.
+- Validate a random sample of produced inputs netCDFs (dimensions, variable presence) before large inference.
+
+### 4. `scripts/finetune_presto.py`
 **Purpose:**  
 Fine-tunes a Presto model on country-specific crop type or land cover data.
 
@@ -46,7 +154,7 @@ For running experiments, the manual arguments are mostly used example below
 
 ---
 
-### 2. `scripts/train_catboost.py`
+### 5. `scripts/train_catboost.py`
 **Purpose:**  
 Trains a CatBoost classifier on embeddings generated by a fine-tuned Presto model.
 
@@ -94,14 +202,14 @@ Make sure to point to the right Presto model. the one used to generate the embed
 The same manual arguments can be used for training the croptype model. In the latter case, there is no need of providing the `downstream_classes` as they correspond to the `finetune_classes`. 
 
 ---
-### 3. Upload models in artifactory  
+### 6. Upload models in artifactory  
 
 Once the presto and catboost models have been trained and a version is chosen, they need to be uploaded in artifactory at https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/.
 Copy the URLs to the models and report them in the `constants.py` script in the `PRODUCTION_MODELS_URLS` dictionary. 
 
 ---
 
-### 4. `scripts/run_production.py`
+### 7. `scripts/run_production.py`
 **Purpose:**  
 Submits large-scale inference jobs for crop type and cropland prediction using trained models.
 
@@ -161,3 +269,4 @@ Make sure to use the same folder structure for each country
 - All outputs (trained models, metrics, logs) are saved in the specified output directories.
 - For debugging or custom runs, you can modify the manual argument lists or variable assignments at the top of each script.
 ---
+
