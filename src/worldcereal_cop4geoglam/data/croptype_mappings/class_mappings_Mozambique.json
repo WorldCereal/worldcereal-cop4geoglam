@@ -1,5 +1,6 @@
 {
     "LANDCOVER10": {
+        "1000000000": "temporary_crops",
         "1101060000": "temporary_crops",
         "1101070010": "temporary_crops",
         "1101080000": "temporary_crops",
@@ -12,6 +13,7 @@
         "1105010018": "temporary_crops",
         "1105010050": "temporary_crops",
         "1105010060": "temporary_crops",
+        "1105020000": "temporary_crops",
         "1106000010": "temporary_crops",
         "1106000020": "temporary_crops",
         "1106000100": "temporary_crops",
@@ -48,7 +50,7 @@
         "7000000000": "water"
     },
     "CROPTYPE_Mozambique": {
-        "1110106000": "maize",
+        "1101060000": "maize",
         "1101070010": "other_crops",   
         "1101080000": "rice",
         "1101120000": "other_crops",
