@@ -575,6 +575,9 @@ class PrestoEmbeddingTrainer:
             self.output_dir / f"{self.cb_model_name}_classification_report.csv"
         )
 
+        logger.info("Evaluation results:")
+        logger.info("\n" + report_df.to_string(index=True))
+
         # Confusion matrices
         self._plot_confusion_matrices(true_labels, preds)
 
