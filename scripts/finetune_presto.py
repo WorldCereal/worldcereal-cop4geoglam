@@ -338,7 +338,7 @@ def main(args):
     plt.savefig(str(Path(output_dir) / f"CM_{experiment_name}_norm.png"))
     plt.close()
 
-    eval_results.to_csv(
+    eval_results.round(2).to_csv(
         Path(output_dir) / f"results_{experiment_name}.csv", index=False
     )
     logger.info("Evaluation results:")
@@ -397,7 +397,6 @@ def parse_args(arg_list=None):
         help="List of layer names or patterns to freeze during training.",
     )
 
-
     args = parser.parse_args(arg_list)
 
     return args
@@ -406,19 +405,21 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "run-with-AL-and-freezing",
+        "for-metrics",
         "--timestep_freq",
         "month",
         "--country",
         "moldova",
         # "--augment",
         "--finetune_classes",
-        "LANDCOVER10",
+        "CROPTYPE_Moldova",
         "--use_balancing",
         "--freeze_layers",
         "encoder",
+        "--val_samples_file",
+        "/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/moldova/val_ids_moldova.csv",
         "--test_samples_file",
-        "/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/validation_ids/val_ids_moldova.csv",
+        "/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/moldova/test_ids_moldova.csv",
         # "--debug",
     ]
     # manual_args = None
