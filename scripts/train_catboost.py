@@ -570,7 +570,7 @@ class PrestoEmbeddingTrainer:
         report = classification_report(
             true_labels, preds, output_dict=True, zero_division=0
         )
-        report_df = pd.DataFrame(report).transpose()
+        report_df = pd.DataFrame(report).transpose().round(2)
         report_df.to_csv(
             self.output_dir / f"{self.cb_model_name}_classification_report.csv"
         )
@@ -799,24 +799,24 @@ def main() -> None:
     USE_MANUAL_CONFIG = True
 
     # for croptype
-    balance = False
+    balance = True
     country = "moldova"
-    modelversion = "120-MDA"
-    finetune_classes = "LANDCOVER10"
-    detector = "cropland"
-    presto_model_name = "presto-prometheo-cop4geoglam-run-with-AL-and-freezing-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202509111120"
-    downstream_classes = {
-        "temporary_crops": "cropland",
-        "temporary_grasses": "other",
-        "permanent_crops": "cropland",
-        "grasslands": "other",
-        "wetlands": "other",
-        "shrubland": "other",
-        "trees": "other",
-        "built_up": "other",
-        "water": "other",
-    }
-    # downstream_classes = None
+    modelversion = "120-MDA-formetrics"
+    finetune_classes = "CROPTYPE_Moldova"
+    detector = "croptype"
+    presto_model_name = "presto-prometheo-cop4geoglam-for-metrics-month-CROPTYPE_Moldova-augment=False-balance=True-timeexplicit=False-run=202509231601"
+    # downstream_classes = {
+    #     "temporary_crops": "cropland",
+    #     "temporary_grasses": "other",
+    #     "permanent_crops": "cropland",
+    #     "grasslands": "other",
+    #     "wetlands": "other",
+    #     "shrubland": "other",
+    #     "trees": "other",
+    #     "built_up": "other",
+    #     "water": "other",
+    # }
+    downstream_classes = None
 
     # set up paths and filenames
     presto_run_tag = presto_model_name.split("-")[-1]
