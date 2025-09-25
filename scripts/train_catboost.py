@@ -799,34 +799,35 @@ def main() -> None:
     USE_MANUAL_CONFIG = True
 
     # for croptype
-    balance = False
-    country = "moldova"
-    modelversion = "120-MDA"
-    finetune_classes = "LANDCOVER10"
-    detector = "cropland"
-    presto_model_name = "presto-prometheo-cop4geoglam-run-with-AL-and-freezing-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-run=202509111120"
-    downstream_classes = {
-        "temporary_crops": "cropland",
-        "temporary_grasses": "other",
-        "permanent_crops": "cropland",
-        "grasslands": "other",
-        "wetlands": "other",
-        "shrubland": "other",
-        "trees": "other",
-        "built_up": "other",
-        "water": "other",
-    }
-    # downstream_classes = None
+    balance = True
+    country = "mozambique"
+    modelversion = "1"
+    finetune_classes = "CROPTYPE_Mozambique_no_mixed"
+    detector = "croptype"
+    presto_model_name = "presto-prometheo-cop4geoglam-exp_points_no_agroforestry_no_sugarcane_cowpea-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509251303"
+    # downstream_classes = {
+    #     "temporary_crops": "cropland",
+    #     "temporary_grasses": "other",
+    #     "permanent_crops": "cropland",
+    #     "grasslands": "other",
+    #     "wetlands": "other",
+    #     "shrubland": "other",
+    #     "trees": "other",
+    #     "built_up": "other",
+    #     "bare_sparsely_vegetated": "other",
+    #     "water": "other",
+    # }
+    downstream_classes = None
 
     # set up paths and filenames
     presto_run_tag = presto_model_name.split("-")[-1]
     cb_model_name = f"Presto_{presto_run_tag}_DownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
-    presto_model_path = f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{presto_model_name}/{presto_model_name}.pt"
+    presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/v{modelversion}/{presto_model_name}/{presto_model_name}.pt"
     data_dir = (
-        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{presto_model_name}/"
+         f"{Path(presto_model_path).parent}"
     )
     output_dir = (
-        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/{detector}/{cb_model_name}"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/v{modelversion}/{detector}/{cb_model_name}"
     )
 
     if USE_MANUAL_CONFIG:

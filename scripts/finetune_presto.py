@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -80,11 +81,12 @@ def main(args):
     label_window = args.label_window
 
     # Experiment signature
+    version = args.version
+    freezing = True if args.freeze_layers != [] else False
     timestamp_ind = datetime.now().strftime("%Y%m%d%H%M")
-
-    experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-run={timestamp_ind}"
+    experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-freezing={freezing}-run={timestamp_ind}"
     output_dir = (
-        f"/projects/TAP/worldcereal/COP4GEOGLAM/{country}/models/{experiment_name}"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/v{version}/{experiment_name}"
     )
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -107,7 +109,7 @@ def main(args):
             f"Supported classes are 'LANDCOVER' and 'CROPTYPE'. "
             f"Loading default WorldCereal pretrained model: {pretrained_model_path}"
         )
-
+    learning_rate = 1e-3
     epochs = 100
     batch_size = (
         256  # For small datasets we need to keep this small to avoid overfitting!
@@ -187,6 +189,8 @@ def main(args):
         label_window=label_window,
     )
 
+    logger.info(f"Train dataset size: {train_ds.__len__()}, Val dataset size: {val_ds.__len__()}, Test dataset size: {test_ds.__len__()}")
+
     # Construct the finetuning model based on the pretrained model
     if pretrained_model_tag != "DEFAULT":
         model = Presto(
@@ -215,6 +219,7 @@ def main(args):
 
     # Set the parameters
     hyperparams = Hyperparams(
+        lr = learning_rate,
         max_epochs=epochs,
         batch_size=batch_size,
         patience=patience,
@@ -345,6 +350,45 @@ def main(args):
     logger.info("\n" + eval_results.to_string(index=False))
 
     logger.info("Finetuning completed!")
+    # Save experiment configuration to JSON
+
+    exp_details = {
+        "experiment_tag": experiment_tag,
+        "timestep_freq": timestep_freq,
+        "country": country,
+        "val_samples_file": val_samples_file,
+        "test_samples_file": test_samples_file,
+        "finetune_classes": finetune_classes,
+        "augment": augment,
+        "time_explicit": time_explicit,
+        "debug": debug,
+        "use_balancing": use_balancing,
+        "label_jitter": label_jitter,
+        "label_window": label_window,
+        "version": version,
+        "freeze_layers": args.freeze_layers,
+        "output_dir": output_dir,
+        "pretrained_model_path": pretrained_model_path,
+        "pretrained_model_tag": pretrained_model_tag,
+        "learning_rate": learning_rate,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "patience": patience,
+        "num_workers": num_workers,
+        "unfreeze_epoch": unfreeze_epoch,
+        "num_classes": num_classes,
+        "task_type": task_type,
+        "num_outputs": num_outputs,
+        "classes_list": classes_list,
+        "train_df_size": len(train_df),
+        "val_df_size": len(val_df),
+        "test_df_size": len(test_df),
+        "parquet_files": parquet_files,
+        "experiment_name": experiment_name,
+    }
+
+    with open(Path(output_dir) / f"config_{experiment_name}.json", "w") as f:
+        json.dump(exp_details, f, indent=4)
 
 
 def parse_args(arg_list=None):
@@ -378,7 +422,7 @@ def parse_args(arg_list=None):
     )
 
     # Task setup
-    parser.add_argument("--finetune_classes", type=str, default="LANDCOVER14")
+    parser.add_argument("--finetune_classes", type=str, default="LANDCOVER10")
     parser.add_argument("--augment", action="store_true")
     parser.add_argument("--time_explicit", action="store_true")
     parser.add_argument("--debug", action="store_true")
@@ -396,7 +440,7 @@ def parse_args(arg_list=None):
         default=[],
         help="List of layer names or patterns to freeze during training.",
     )
-
+    parser.add_argument("--version", type=str, default="0")
 
     args = parser.parse_args(arg_list)
 
@@ -404,22 +448,31 @@ def parse_args(arg_list=None):
 
 
 if __name__ == "__main__":
+    country = "mozambique"
+    finetune_classes = "CROPTYPE_Mozambique_no_mixed"
+    task = finetune_classes.split("_")[0].lower()
+    version = "1"
+
     manual_args = [
         "--experiment_tag",
-        "run-with-AL-and-freezing",
+        "exp_points_balanced",
         "--timestep_freq",
         "month",
         "--country",
-        "moldova",
+        country,
         # "--augment",
         "--finetune_classes",
-        "LANDCOVER10",
+        finetune_classes,
         "--use_balancing",
         "--freeze_layers",
         "encoder",
+        "--val_samples_file",
+        f"/home/giorgia/Private/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/val_ids_{country}.csv",
         "--test_samples_file",
-        "/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/validation_ids/val_ids_moldova.csv",
+        f"/home/giorgia/Private/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/test_ids_{country}.csv",
         # "--debug",
+        "--version",
+        version,
     ]
     # manual_args = None
 
