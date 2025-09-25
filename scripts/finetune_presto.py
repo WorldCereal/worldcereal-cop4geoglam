@@ -343,7 +343,7 @@ def main(args):
     plt.savefig(str(Path(output_dir) / f"CM_{experiment_name}_norm.png"))
     plt.close()
 
-    eval_results.to_csv(
+    eval_results.round(2).to_csv(
         Path(output_dir) / f"results_{experiment_name}.csv", index=False
     )
     logger.info("Evaluation results:")

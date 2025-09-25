@@ -570,10 +570,13 @@ class PrestoEmbeddingTrainer:
         report = classification_report(
             true_labels, preds, output_dict=True, zero_division=0
         )
-        report_df = pd.DataFrame(report).transpose()
+        report_df = pd.DataFrame(report).transpose().round(2)
         report_df.to_csv(
             self.output_dir / f"{self.cb_model_name}_classification_report.csv"
         )
+
+        logger.info("Evaluation results:")
+        logger.info("\n" + report_df.to_string(index=True))
 
         # Confusion matrices
         self._plot_confusion_matrices(true_labels, preds)
