@@ -11,6 +11,7 @@ produces three products per input file:
 Outputs are written as NetCDF files preserving original geospatial metadata.
 """
 
+import json
 import logging
 from pathlib import Path
 
@@ -145,20 +146,20 @@ def main():
     # Manually define arguments here
     logging.info("Starting.")
     country = "mozambique"
-
+    exp_tag = "local_debug_duplicates"
     input_dir = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/preprocessed_inputs_newimage"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/PSU_preprocessed_inputs"
     )
     output_dir = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/local_debug"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{exp_tag}"
     )
     target_date = None
 
     # Specify model URLs (override as needed). You can leave any as None to use defaults
     cropland_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v0/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104_encoder.pt"
-    cropland_classifier_model_url = ...
-    croptype_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v1/presto-prometheo-cop4geoglam-exp_points_no_agroforestry_no_sugarcane_cowpea-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509251303/presto-prometheo-cop4geoglam-exp_points_no_agroforestry_no_sugarcane_cowpea-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509251303_encoder.pt"
-    croptype_classifier_model_url = ...
+    croptype_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v1/presto-prometheo-cop4geoglam-exp_points_with_duplicates-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261554/presto-prometheo-cop4geoglam-exp_points_with_duplicates-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261554_encoder.pt"
+    cropland_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202509261104_DownstreamCatBoost_cropland_v0_balance%3DTrue.onnx"
+    croptype_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202509261554_DownstreamCatBoost_croptype_v1_balance%3DTrue.onnx"
 
     input_files = list(input_dir.rglob("*.nc"))
 
@@ -211,6 +212,18 @@ def main():
         except Exception as e:
             print(f"Error processing file {input_file}: {e}")
             raise
+
+    inference_settings = {
+        "cropland_feature_model": Path(cropland_feature_model_url).name if cropland_feature_model_url else None,
+        "croptype_feature_model": Path(croptype_feature_model_url).name if croptype_feature_model_url else None,
+        "cropland_classifier_model": Path(cropland_classifier_model_url).name if cropland_classifier_model_url else None,
+        "croptype_classifier_model": Path(croptype_classifier_model_url).name if croptype_classifier_model_url else None,
+    }
+
+    report_path = output_dir / "inference_settings.json"
+    with open(report_path, "w") as f:
+        json.dump(inference_settings, f, indent=2)
+    print(f"inference settings saved to: {report_path}")
 
 
 if __name__ == "__main__":
