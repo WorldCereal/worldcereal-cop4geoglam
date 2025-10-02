@@ -146,7 +146,7 @@ def main():
     # Manually define arguments here
     logging.info("Starting.")
     country = "mozambique"
-    exp_tag = "local_no_mixed_no_agroforestry"
+    exp_tag = "local_with_mixed_crop_class"
     input_dir = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/PSU_preprocessed_inputs"
     )
@@ -157,9 +157,9 @@ def main():
 
     # Specify model URLs (override as needed). You can leave any as None to use defaults
     cropland_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v0/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104_encoder.pt"
-    croptype_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v1/presto-prometheo-cop4geoglam-exp_points_no_agroforestry_no_sugarcane_cowpea-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509251303/presto-prometheo-cop4geoglam-exp_points_no_agroforestry_no_sugarcane_cowpea-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509251303_encoder.pt"
+    croptype_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v1/presto-prometheo-cop4geoglam-exp_points_with_mixed_crops_class-month-CROPTYPE_Mozambique_mixed_class-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510011045/presto-prometheo-cop4geoglam-exp_points_with_mixed_crops_class-month-CROPTYPE_Mozambique_mixed_class-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510011045_encoder.pt"
     cropland_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202509261104_DownstreamCatBoost_cropland_v0_balance%3DTrue.onnx"
-    croptype_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202509251303_DownstreamCatBoost_croptype_v1_balance%3DTrue.onnx"
+    croptype_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202510011045_DownstreamCatBoost_croptype_v1_balance%3DTrue.onnx"
 
     input_files = list(input_dir.rglob("*.nc"))
 
@@ -191,9 +191,9 @@ def main():
 
             # Apply cropland mask to croptype classification: set croptype to NODATAVALUE where cropland==0
             classification_band_idx = int((cropland.bands == "classification").argmax().item())
-            cropland_mask = cropland[classification_band_idx, :, :]
+            no_crop_mask = cropland[classification_band_idx, :, :]
             croptype_masked = croptype.copy()
-            croptype_masked = croptype.where(cropland_mask == 0, NODATAVALUE)
+            croptype_masked = croptype.where(no_crop_mask != 0, NODATAVALUE)
 
             croptype_masked_ds = reconstruct_dataset(arr=croptype_masked, ds=ds)
             cropland_features_ds = reconstruct_dataset(arr=cropland_features, ds=ds)

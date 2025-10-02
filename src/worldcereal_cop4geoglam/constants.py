@@ -25,9 +25,9 @@ COUNTRY_PARQUET_FILES: Dict[str, Dict[str, List[str]]] = {
     "mozambique": {
         "month": [
             # "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_merged_extractions.parquet/ref_id=2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_20250919_1",
-            # "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_merged_extractions.parquet/ref_id=2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS",
+            "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_merged_extractions.parquet/ref_id=2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS",
             # "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_merged_extractions_no_agroforestry.parquet",
-            "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/mixed_cropping/worldcereal_merged_extractions_mozambique_duplicated_with_EXT.parquet"
+            # "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/mixed_cropping/worldcereal_merged_extractions_mozambique_duplicated_with_EXT.parquet"
         ],
         "dekad": []
     }
