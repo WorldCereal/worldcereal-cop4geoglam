@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 import matplotlib.pyplot as plt
+import pandas as pd
 import torch
 from loguru import logger
 from prometheo.finetune import Hyperparams, run_finetuning
@@ -80,6 +81,9 @@ def main(args):
     # ± timesteps to expand around label pos (true or moved), for time_explicit only; will only be set for training
     label_window = args.label_window
 
+    # Use WorldCereal data or COP4GEOGLAM data
+    use_worldcereal_data = args.use_worldcereal_data
+
     # Experiment signature
     version = args.version
     freezing = True if args.freeze_layers != [] else False
@@ -109,14 +113,14 @@ def main(args):
             f"Supported classes are 'LANDCOVER' and 'CROPTYPE'. "
             f"Loading default WorldCereal pretrained model: {pretrained_model_path}"
         )
-    learning_rate = 1e-3
+    learning_rate = 1e-4
     epochs = 100
     batch_size = (
         256  # For small datasets we need to keep this small to avoid overfitting!
     )
     patience = 10
     num_workers = 2
-    unfreeze_epoch = 30  # Epoch to start unfreezing layers gradually
+    unfreeze_epoch = 20  # Epoch to start unfreezing layers gradually
 
     # ------------------------------------------
 
@@ -137,6 +141,21 @@ def main(args):
         test_samples_file=test_samples_file,
         debug=debug,
     )
+
+    # Use WorldCereal data or COP4GEOGLAM data
+    if use_worldcereal_data:
+        logger.info("Using WorldCereal data")
+        wc_parquet = Path("/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_samples_cropped.parquet")
+        train_df_wc, val_df_wc, test_df_wc = get_training_dfs_from_parquet(
+            wc_parquet,
+            timestep_freq=timestep_freq,
+            finetune_classes=finetune_classes,
+            class_mappings=CLASS_MAPPINGS,
+        )
+        wc_data = pd.concat([train_df_wc, val_df_wc, test_df_wc], ignore_index=True)
+        logger.info(f"Adding WorldCereal data to training: {len(wc_data)}")
+        wc_data = wc_data[[c for c in train_df.columns]]
+        train_df = pd.concat([train_df, wc_data], ignore_index=True)
 
     logger.warning("Still applying a patch here ...")
     train_df = train_df[train_df["available_timesteps"] >= 12]
@@ -228,7 +247,7 @@ def main(args):
 
     # Set the optimizer with layer-wise lr decay
     parameters = param_groups_lrd(model)
-    optimizer = AdamW(parameters, lr=1e-4)
+    optimizer = AdamW(parameters, lr=hyperparams.lr)
 
     # # Define constant learning rate scheduler for the first few epochs
     # constant_lr_scheduler = lr_scheduler.ConstantLR(
@@ -247,7 +266,7 @@ def main(args):
 
     # ReduceLROnPlateau
     reduce_lr_on_plateau_scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=3
+        optimizer, patience=3, factor=0.5, verbose=True, min_lr=1e-6
     )
     scheduler = reduce_lr_on_plateau_scheduler
 
@@ -264,6 +283,8 @@ def main(args):
                 generator=generator,
                 sampling_class="finetune_class",
                 method="log",
+                clip_range=None,
+                normalize=True,
             )
             if use_balancing
             else None
@@ -385,6 +406,7 @@ def main(args):
         "test_df_size": len(test_df),
         "parquet_files": parquet_files,
         "experiment_name": experiment_name,
+        "use_worldcereal_data": use_worldcereal_data if use_worldcereal_data else False,
     }
 
     with open(Path(output_dir) / f"config_{experiment_name}.json", "w") as f:
@@ -441,6 +463,7 @@ def parse_args(arg_list=None):
         help="List of layer names or patterns to freeze during training.",
     )
     parser.add_argument("--version", type=str, default="0")
+    parser.add_argument("--use_worldcereal_data", action="store_true")
 
     args = parser.parse_args(arg_list)
 
@@ -449,13 +472,13 @@ def parse_args(arg_list=None):
 
 if __name__ == "__main__":
     country = "mozambique"
-    finetune_classes = "CROPTYPE_Mozambique_no_mixed"
+    finetune_classes = "CROPTYPE_Mozambique_new"
     task = finetune_classes.split("_")[0].lower()
-    version = "1"
+    version = "3"
 
     manual_args = [
         "--experiment_tag",
-        "exp_points_balanced",
+        "exp_points_with_wc",
         "--timestep_freq",
         "month",
         "--country",
@@ -473,6 +496,7 @@ if __name__ == "__main__":
         # "--debug",
         "--version",
         version,
+        "--use_worldcereal_data",
     ]
     # manual_args = None
 
