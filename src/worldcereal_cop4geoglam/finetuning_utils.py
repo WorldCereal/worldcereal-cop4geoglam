@@ -259,7 +259,9 @@ def evaluate_finetuned_model(
             elif test_ds.task_type == "multiclass":
                 probs = (
                     torch.softmax(model_output, dim=-1)  # Softmax on the logits
-                    .squeeze(dim=[1, 2, 3])  # Remove space/time dimensions (B, C) remains
+                    .squeeze(
+                        dim=[1, 2, 3]
+                    )  # Remove space/time dimensions (B, C) remains
                     .cpu()
                     .numpy()
                 )  # shape (B,C)
@@ -392,19 +394,6 @@ def run_finetuning(
     freeze_layers: Optional[List[str]] = None,
     unfreeze_epoch: Optional[int] = None,
 ):
-    """Fine-tune a Presto model with optional temporally weighted supervision.
-
-    Args:
-        apply_temporal_weights: When ``True`` the temporal kernel weights are
-            folded into the loss; when ``False`` the priors are still passed to
-            the model (e.g. for attention MIL) but the loss defaults to
-            uniform-in-time weighting.
-        visualize_attention_every: Plot attention snapshots every N epochs
-            (set to ``None`` or ``0`` to disable).
-        attention_entropy_weight: Strength of entropy regularisation on temporal
-            attention (0 disables it).
-    """
-
     output_dir = Path(output_dir)
     _prometheo_setup(output_dir, experiment_name, setup_logging)
     seed_everything()
