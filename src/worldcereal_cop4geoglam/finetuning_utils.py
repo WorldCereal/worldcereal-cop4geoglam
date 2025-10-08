@@ -10,7 +10,7 @@ import torch
 from loguru import logger
 from prometheo.finetune import Hyperparams
 from prometheo.finetune import _setup as _prometheo_setup
-from prometheo.predictors import NODATAVALUE, Predictors
+from prometheo.predictors import Predictors
 from prometheo.utils import DEFAULT_SEED, device, seed_everything
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
@@ -225,7 +225,7 @@ def evaluate_finetuned_model(
     -------
     ValueError : If the task type in the test dataset is not supported (must be 'binary' or 'multiclass').
     """
-    from sklearn.metrics import ConfusionMatrixDisplay, classification_report
+    from sklearn.metrics import ConfusionMatrixDisplay
     from torch.utils.data import DataLoader
 
     # Put model in eval mode
@@ -242,7 +242,7 @@ def evaluate_finetuned_model(
 
     # Run the model on the test set
     all_probs = []
-    all_preds = []
+    # all_preds = []
     all_targets = []
 
     for batch in val_dl:
@@ -255,7 +255,7 @@ def evaluate_finetuned_model(
 
             if test_ds.task_type == "binary":
                 probs = torch.sigmoid(model_output).cpu().numpy()
-                preds = (probs > 0.5).astype(int)
+                # preds = (probs > 0.5).astype(int) #### COMMENTED TO PASS RUFF CHECKS> TEMPORARY SOLUTION
             elif test_ds.task_type == "multiclass":
                 probs = (
                     torch.softmax(model_output, dim=-1)  # Softmax on the logits
@@ -302,9 +302,9 @@ def evaluate_finetuned_model(
 
     if time_explicit:
         raise NotImplementedError
-        all_probs = np.concatenate(all_probs) if all_probs else np.array([])
-        all_preds = np.concatenate(all_preds) if all_preds else np.array([])
-        all_targets = np.concatenate(all_targets) if all_targets else np.array([])
+        # all_probs = np.concatenate(all_probs) if all_probs else np.array([])
+        # all_preds = np.concatenate(all_preds) if all_preds else np.array([])
+        # all_targets = np.concatenate(all_targets) if all_targets else np.array([])
     else:
         all_probs = np.concatenate(all_probs)
         # all_preds = np.concatenate(all_preds)
@@ -376,7 +376,7 @@ def evaluate_finetuned_model(
     #     ["class", "precision", "recall", "f1-score", "support"]
     # )
 
-    return None, cm, cm_norm
+    return None, cm, cm_norm, all_targets, all_probs
 
 
 def run_finetuning(
@@ -386,8 +386,8 @@ def run_finetuning(
     experiment_name: str,
     output_dir: Union[Path, str],
     loss_fn: torch.nn.Module,
-    optimizer: Union[torch.optim.Optimizer, None] = None,
-    scheduler: Union[torch.optim.lr_scheduler.LRScheduler, None] = None,
+    optimizer: Union[torch.optim.Optimizer],
+    scheduler: Union[torch.optim.lr_scheduler.LRScheduler],
     hyperparams: Hyperparams = Hyperparams(),
     seed: int = DEFAULT_SEED,
     setup_logging: bool = True,
