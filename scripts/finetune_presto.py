@@ -13,7 +13,6 @@ from prometheo.finetune import Hyperparams
 from prometheo.models import Presto
 from prometheo.models.presto import param_groups_lrd
 from prometheo.models.presto.wrapper import load_presto_weights
-from prometheo.predictors import NODATAVALUE
 from prometheo.utils import DEFAULT_SEED, device, initialize_logging
 from torch import nn
 from torch.optim import AdamW, lr_scheduler
@@ -112,14 +111,14 @@ def main(args):
             f"Supported classes are 'LANDCOVER' and 'CROPTYPE'. "
             f"Loading default WorldCereal pretrained model: {pretrained_model_path}"
         )
-    learning_rate = 1e-4
+    learning_rate = 2e-5
     epochs = 100
     batch_size = (
         256  # For small datasets we need to keep this small to avoid overfitting!
     )
     patience = 10
     num_workers = 2
-    unfreeze_epoch = 15  # Epoch to start unfreezing layers gradually
+    unfreeze_epoch = 30  # Epoch to start unfreezing layers gradually
 
     # ------------------------------------------
 
@@ -164,7 +163,7 @@ def main(args):
     if use_worldcereal_data:
         logger.info("Using WorldCereal data")
         wc_parquet = Path(
-            "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_samples_cropped.parquet"
+            f"/projects/worldcereal/COP4GEOGLAM/{country}/worldcereal_samples_cropped.parquet"
         )
         train_df_wc, val_df_wc, test_df_wc = get_training_dfs_from_parquet(
             wc_parquet,
@@ -172,10 +171,12 @@ def main(args):
             finetune_classes=finetune_classes,
             class_mappings=CLASS_MAPPINGS,
         )
-        wc_data = pd.concat([train_df_wc, val_df_wc, test_df_wc], ignore_index=True)
+        wc_data = pd.concat([train_df_wc, test_df_wc], ignore_index=True)
         logger.info(f"Adding WorldCereal data to training: {len(wc_data)}")
         wc_data = wc_data[[c for c in train_df.columns]]
         train_df = pd.concat([train_df, wc_data], ignore_index=True)
+        val_df_wc = val_df_wc[[c for c in val_df.columns]]
+        val_df = pd.concat([val_df, wc_data], ignore_index=True)
 
     logger.warning("Still applying a patch here ...")
     train_df = train_df[train_df["available_timesteps"] >= 12]
@@ -310,8 +311,8 @@ def main(args):
 
     # ReduceLROnPlateau
     reduce_lr_on_plateau_scheduler = lr_scheduler.ReduceLROnPlateau(
-        optimizer, patience=3, factor=0.5, verbose=True, min_lr=1e-6
-    )
+        optimizer, patience=3
+    ) #, factor=0.5, verbose=True, min_lr=1e-6
     scheduler = reduce_lr_on_plateau_scheduler
 
     # Setup dataloaders
@@ -363,7 +364,7 @@ def main(args):
 
     # Evaluate the finetuned model
     logger.info("Evaluating the finetuned model...")
-    eval_results, confusionmatrix, confusionmatrix_norm = evaluate_finetuned_model(
+    _, confusionmatrix, confusionmatrix_norm, all_targets, all_probs = evaluate_finetuned_model(
         finetuned_model,
         test_ds,
         num_workers,
@@ -407,6 +408,16 @@ def main(args):
     plt.tight_layout()
     plt.savefig(str(Path(output_dir) / f"CM_{experiment_name}_norm.png"))
     plt.close()
+
+    # save predictions and targets
+    prediction_df = pd.DataFrame(all_probs, columns=[f"{c}" for c in classes_list])
+    prediction_df["sample_id"] = test_df["sample_id"].values
+    prediction_df["type"] = "prediction"
+    target_df = pd.DataFrame(all_targets, columns=[f"{c}" for c in classes_list])
+    target_df["sample_id"] = test_df["sample_id"].values
+    target_df["source"] = "target"
+    results_df = pd.concat([target_df, prediction_df], ignore_index=True)
+    results_df.to_parquet(Path(output_dir) / f"predictions_presto_run={timestamp_ind}.parquet")
 
     ### CANNOT DO THE BELOW AS WE HAVE TO FIX THE REPORTING
     # eval_results.round(2).to_csv(
@@ -519,11 +530,11 @@ if __name__ == "__main__":
     country = "mozambique"
     finetune_classes = "CROPTYPE_Mozambique_fuzzy"
     task = finetune_classes.split("_")[0].lower()
-    version = "3"
+    version = "1"
 
     manual_args = [
         "--experiment_tag",
-        "test-fuzzy",
+        "test-fuzzy-wc-data-trainval",
         "--timestep_freq",
         "month",
         "--country",
@@ -535,13 +546,13 @@ if __name__ == "__main__":
         "--freeze_layers",
         "encoder",
         "--val_samples_file",
-        f"/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/val_ids_{country}.csv",
+        f"{Path(__file__).parent.parent}/src/worldcereal_cop4geoglam/data/{country}/val_ids_{country}.csv",
         "--test_samples_file",
-        f"/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/test_ids_{country}.csv",
+        f"{Path(__file__).parent.parent}/src/worldcereal_cop4geoglam/data/{country}/test_ids_{country}.csv",
         # "--debug",
         "--version",
         version,
-        # "--use_worldcereal_data",
+        "--use_worldcereal_data",
     ]
     # manual_args = None
 
