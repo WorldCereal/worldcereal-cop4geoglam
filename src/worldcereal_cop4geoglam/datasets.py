@@ -17,6 +17,49 @@ from torch.utils.data import WeightedRandomSampler
 from worldcereal.train.datasets import WorldCerealDataset, get_class_weights
 
 
+def get_class_weights_from_soft_targets(
+    target_probs: np.ndarray,
+    method: str = "balanced",  # 'balanced', 'log', or 'none'
+    clip_range: Optional[tuple] = None,
+    normalize: bool = True,
+) -> Dict[int, float]:
+    """
+    Compute class weights for soft/fuzzy targets.
+
+    Args:
+        target_probs: array of shape (N, C) with per-class membership probabilities.
+        method: same options as the original: 'balanced', 'log', or 'none'.
+        clip_range: tuple (min, max) to clip weights.
+        normalize: whether to rescale weights to mean = 1.
+
+    Returns:
+        class_weights_dict: dict mapping class index → weight
+    """
+    # Effective soft class counts (sum of membership)
+    class_mass = target_probs.sum(axis=0)  # shape (C,)
+    total_mass = class_mass.sum()
+    num_classes = len(class_mass)
+
+    if method == "balanced":
+        # identical to sklearn-style formula: N / (C * n_c)
+        weights = total_mass / (num_classes * class_mass)
+    elif method == "log":
+        inv_freq = 1.0 / class_mass
+        weights = np.log1p(inv_freq / np.mean(inv_freq))
+    elif method == "none":
+        weights = np.ones_like(class_mass)
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+    if clip_range:
+        weights = np.clip(weights, clip_range[0], clip_range[1])
+
+    if normalize:
+        weights = weights / weights.mean()
+
+    return {c: float(w) for c, w in enumerate(weights)}
+
+
 class MaskingMode(str, Enum):
     NONE = "none"
     FIXED = "fixed"
@@ -170,6 +213,7 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
         task_type: Literal["binary", "multiclass"] = "binary",
         num_outputs: int = 1,
         classes_list: Union[np.ndarray, List[str]] = [],
+        fuzzy_targets: bool = False,
         time_explicit: bool = False,
         augment: bool = False,
         # masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
@@ -188,6 +232,10 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
         classes_list : List, optional
             list of column names in the dataframe containing class labels for multiclass tasks,
             used to extract labels from each row of the dataframe, by default []
+        fuzzy_targets : bool, optional
+            if True, the `finetune_class` column in the dataframe is expected to contain
+            soft/fuzzy labels (list/array of class membership probabilities) instead of hard labels,
+            by default False. Only used if `task_type` is "multiclass".
         time_explicit : bool, optional
             if True, labels respect the full temporal dimension
             to have temporally explicit outputs, by default False
@@ -214,7 +262,14 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             **kwargs,
         )
         self.classes_list = classes_list
+        self.fuzzy_targets = fuzzy_targets
+        if task_type == "binary":
+            assert not fuzzy_targets, "fuzzy_targets not supported for binary task"
         self.time_explicit = time_explicit
+        if time_explicit and fuzzy_targets:
+            raise NotImplementedError(
+                "time_explicit=True not yet implemented for fuzzy_targets=True"
+            )
         self.label_jitter = label_jitter
         self.label_window = label_window
         self.return_sample_id = return_sample_id
@@ -248,9 +303,11 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
     def initialize_label(self):
         tsteps = self.num_timesteps if self.time_explicit else 1
         label = np.full(
-            (1, 1, tsteps, 1),
-            fill_value=NODATAVALUE,
-            dtype=np.int32,
+            (1, 1, tsteps, self.num_outputs if self.fuzzy_targets else 1),
+            fill_value=NODATAVALUE
+            if not self.fuzzy_targets
+            else np.nan,  # Fuzzy targets cannot work with NODATAVALUE
+            dtype=np.float32 if self.fuzzy_targets else np.int32,
         )  # [H, W, T or 1, 1]
 
         return label
@@ -329,9 +386,9 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             else:
                 # apply jitter
                 # scalar valid_position must be an int here
-                assert isinstance(
-                    valid_position, int
-                ), f"Expected single int valid_position, got {type(valid_position)}"
+                assert isinstance(valid_position, int), (
+                    f"Expected single int valid_position, got {type(valid_position)}"
+                )
                 p = valid_position
                 if self.label_jitter > 0:
                     shift = np.random.randint(-self.label_jitter, self.label_jitter + 1)
@@ -354,7 +411,10 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
         elif task_type == "multiclass":
             if not classes_list:
                 raise ValueError("classes_list should be provided for multiclass task")
-            label[0, 0, valid_idx, 0] = classes_list.index(row_d["finetune_class"])
+            if self.fuzzy_targets:
+                label[0, 0, valid_idx, :] = row_d["finetune_class"]
+            else:
+                label[0, 0, valid_idx, 0] = classes_list.index(row_d["finetune_class"])
 
         return label
 
@@ -381,15 +441,35 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
         bc_vals = self.dataframe[sampling_class].values
 
         logger.info("Computing class weights ...")
-        class_weights = get_class_weights(
-            bc_vals, method, clip_range=clip_range, normalize=normalize
-        )
-        logger.info(f"Class weights: {class_weights}")
 
-        # per‐sample weight
-        sample_weights = np.ones_like(bc_vals).astype(np.float32)
-        for k, v in class_weights.items():
-            sample_weights[bc_vals == k] = v
+        if type(bc_vals[0]) is list:
+            # Have to follow the fuzzy part here
+            bc_vals = np.vstack(bc_vals)
+            class_weights = get_class_weights_from_soft_targets(
+                bc_vals, method, clip_range=clip_range, normalize=normalize
+            )
+            logger.info(f"Class weights: {class_weights}")
+
+            # Convert dict -> array for broadcasting
+            class_weight_vec = np.array(
+                [class_weights[c] for c in range(len(class_weights))], dtype=np.float32
+            )
+
+            # Each sample's weight = expected class weight under its label distribution
+            sample_weights = (
+                (bc_vals * class_weight_vec[None, :]).sum(axis=1).astype(np.float32)
+            )
+
+        else:
+            class_weights = get_class_weights(
+                bc_vals, method, clip_range=clip_range, normalize=normalize
+            )
+            logger.info(f"Class weights: {class_weights}")
+
+            # per‐sample weight
+            sample_weights = np.ones_like(bc_vals).astype(np.float32)
+            for k, v in class_weights.items():
+                sample_weights[bc_vals == k] = v
 
         sampler = WeightedRandomSampler(
             weights=sample_weights,

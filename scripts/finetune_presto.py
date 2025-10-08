@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from loguru import logger
-from prometheo.finetune import Hyperparams, run_finetuning
+from prometheo.finetune import Hyperparams
 from prometheo.models import Presto
 from prometheo.models.presto import param_groups_lrd
 from prometheo.models.presto.wrapper import load_presto_weights
@@ -30,6 +30,7 @@ from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
     get_class_mappings,
     prepare_training_datasets,
+    run_finetuning,
 )
 
 
@@ -89,9 +90,7 @@ def main(args):
     freezing = True if args.freeze_layers != [] else False
     timestamp_ind = datetime.now().strftime("%Y%m%d%H%M")
     experiment_name = f"presto-prometheo-cop4geoglam-{experiment_tag}-{timestep_freq}-{finetune_classes}-augment={augment}-balance={use_balancing}-timeexplicit={time_explicit}-freezing={freezing}-run={timestamp_ind}"
-    output_dir = (
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/v{version}/{experiment_name}"
-    )
+    output_dir = f"/projects/worldcereal/COP4GEOGLAM/{country}/models/presto/v{version}/{experiment_name}"
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     CLASS_MAPPINGS = get_class_mappings(country)
@@ -120,7 +119,7 @@ def main(args):
     )
     patience = 10
     num_workers = 2
-    unfreeze_epoch = 20  # Epoch to start unfreezing layers gradually
+    unfreeze_epoch = 15  # Epoch to start unfreezing layers gradually
 
     # ------------------------------------------
 
@@ -142,10 +141,31 @@ def main(args):
         debug=debug,
     )
 
+    # We have to make sure we don't have AL or SR samples in the test set
+    logger.info(f"Test samples before filtering AL/SR: {len(test_df)}")
+    test_df = test_df[
+        ~(
+            test_df.sample_id.str.contains("_SR_")
+            | test_df.sample_id.str.contains("_AL_")
+        )
+    ]
+    logger.info(f"Test samples after filtering AL/SR: {len(test_df)}")
+
+    logger.info(f"Test samples before filtering AL/SR: {len(test_df)}")
+    test_df = test_df[
+        ~(
+            test_df.sample_id.str.contains("_SR_")
+            | test_df.sample_id.str.contains("_AL_")
+        )
+    ]
+    logger.info(f"Test samples after filtering AL/SR: {len(test_df)}")
+
     # Use WorldCereal data or COP4GEOGLAM data
     if use_worldcereal_data:
         logger.info("Using WorldCereal data")
-        wc_parquet = Path("/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_samples_cropped.parquet")
+        wc_parquet = Path(
+            "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/trainingdata/worldcereal_samples_cropped.parquet"
+        )
         train_df_wc, val_df_wc, test_df_wc = get_training_dfs_from_parquet(
             wc_parquet,
             timestep_freq=timestep_freq,
@@ -166,18 +186,39 @@ def main(args):
     val_df.to_parquet(Path(output_dir) / "val_df.parquet")
     test_df.to_parquet(Path(output_dir) / "test_df.parquet")
 
-    classes_list = list(sorted(set(CLASS_MAPPINGS[finetune_classes].values())))
+    # ----------------------------------------------------
+    # Temporary hardcoding of classes_list for CROPTYPE_Mozambique_fuzzy
+    # ----------------------------------------------------
+    # Get the list of classes
+    # classes_list = list(sorted(set(CLASS_MAPPINGS[finetune_classes].values())))
     classes_list = [
-        xx for xx in classes_list if xx in train_df["finetune_class"].unique()
+        "maize",
+        "soybean",
+        "sesame",
+        "sweet_potato",
+        "cassava",
+        "pigeon pea",
+        "rice",
+        "other",
     ]
+
+    # classes_list = [
+    #     xx for xx in classes_list if xx in train_df["finetune_class"].unique()
+    # ]
     logger.info(f"classes_list: {classes_list}")
-    num_classes = train_df["finetune_class"].nunique()
+    # num_classes = train_df["finetune_class"].nunique()
+    num_classes = len(classes_list)
+
+    # ----------------------------------------------------
+
     if num_classes == 2:
         task_type = "binary"
         num_outputs = 1
+        fuzzy_targets = False  # Not supported for binary
     elif num_classes > 2:
         task_type = "multiclass"
         num_outputs = num_classes
+        fuzzy_targets = True if type(train_df.finetune_class.iloc[0]) is list else False
     else:
         raise ValueError(
             f"Number of classes {num_classes} is not supported. "
@@ -204,11 +245,14 @@ def main(args):
         task_type=task_type_literal,
         num_outputs=num_outputs,
         classes_list=classes_list,
+        fuzzy_targets=fuzzy_targets,
         label_jitter=label_jitter,
         label_window=label_window,
     )
 
-    logger.info(f"Train dataset size: {train_ds.__len__()}, Val dataset size: {val_ds.__len__()}, Test dataset size: {test_ds.__len__()}")
+    logger.info(
+        f"Train dataset size: {train_ds.__len__()}, Val dataset size: {val_ds.__len__()}, Test dataset size: {test_ds.__len__()}"
+    )
 
     # Construct the finetuning model based on the pretrained model
     if pretrained_model_tag != "DEFAULT":
@@ -229,7 +273,7 @@ def main(args):
     if task_type == "binary":
         loss_fn = nn.BCEWithLogitsLoss()
     elif task_type == "multiclass":
-        loss_fn = nn.CrossEntropyLoss(ignore_index=NODATAVALUE)
+        loss_fn = nn.CrossEntropyLoss()
     else:
         raise ValueError(
             f"Task type {task_type} is not supported. "
@@ -238,7 +282,7 @@ def main(args):
 
     # Set the parameters
     hyperparams = Hyperparams(
-        lr = learning_rate,
+        lr=learning_rate,
         max_epochs=epochs,
         batch_size=batch_size,
         patience=patience,
@@ -364,11 +408,12 @@ def main(args):
     plt.savefig(str(Path(output_dir) / f"CM_{experiment_name}_norm.png"))
     plt.close()
 
-    eval_results.round(2).to_csv(
-        Path(output_dir) / f"results_{experiment_name}.csv", index=False
-    )
-    logger.info("Evaluation results:")
-    logger.info("\n" + eval_results.to_string(index=False))
+    ### CANNOT DO THE BELOW AS WE HAVE TO FIX THE REPORTING
+    # eval_results.round(2).to_csv(
+    #     Path(output_dir) / f"results_{experiment_name}.csv", index=False
+    # )
+    # logger.info("Evaluation results:")
+    # logger.info("\n" + eval_results.to_string(index=False))
 
     logger.info("Finetuning completed!")
     # Save experiment configuration to JSON
@@ -472,13 +517,13 @@ def parse_args(arg_list=None):
 
 if __name__ == "__main__":
     country = "mozambique"
-    finetune_classes = "CROPTYPE_Mozambique_new"
+    finetune_classes = "CROPTYPE_Mozambique_fuzzy"
     task = finetune_classes.split("_")[0].lower()
     version = "3"
 
     manual_args = [
         "--experiment_tag",
-        "exp_points_with_wc",
+        "test-fuzzy",
         "--timestep_freq",
         "month",
         "--country",
@@ -490,13 +535,13 @@ if __name__ == "__main__":
         "--freeze_layers",
         "encoder",
         "--val_samples_file",
-        f"/home/giorgia/Private/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/val_ids_{country}.csv",
+        f"/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/val_ids_{country}.csv",
         "--test_samples_file",
-        f"/home/giorgia/Private/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/test_ids_{country}.csv",
+        f"/home/vito/vtrichtk/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/{country}/test_ids_{country}.csv",
         # "--debug",
         "--version",
         version,
-        "--use_worldcereal_data",
+        # "--use_worldcereal_data",
     ]
     # manual_args = None
 

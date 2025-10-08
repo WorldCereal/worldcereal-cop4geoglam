@@ -1,11 +1,20 @@
 import importlib.resources
 import json
-from typing import Dict, List, Literal, Optional, Tuple
+from copy import deepcopy
+from pathlib import Path
+from typing import Dict, List, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
+from loguru import logger
+from prometheo.finetune import Hyperparams
+from prometheo.finetune import _setup as _prometheo_setup
 from prometheo.predictors import NODATAVALUE, Predictors
+from prometheo.utils import DEFAULT_SEED, device, seed_everything
+from torch.optim import lr_scheduler
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from worldcereal_cop4geoglam import data
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
@@ -26,8 +35,8 @@ def get_class_mappings(country: str = "kenya") -> Dict:
     with importlib.resources.as_file(file_path) as actual_file_path:
         if not actual_file_path.exists():
             raise ValueError(
-            f"Class mappings file `{file_path}` for country `{country}` does not exist."
-        )
+                f"Class mappings file `{file_path}` for country `{country}` does not exist."
+            )
     with file_path.open("r") as f:
         CLASS_MAPPINGS = json.load(f)
 
@@ -45,6 +54,7 @@ def prepare_training_datasets(
     task_type: Literal["binary", "multiclass"] = "binary",
     num_outputs: int = 1,
     classes_list: Optional[List[str]] = None,
+    fuzzy_targets: bool = False,
     # masking_strategy_train: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
     # masking_strategy_val: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
     label_jitter: int = 0,
@@ -77,6 +87,10 @@ def prepare_training_datasets(
         Number of output classes.
     classes_list : Optional[List[str]], default=None
         List of class names. If None, an empty list is used. Required for multiclass task.
+    fuzzy_targets : bool, default=False
+        If True, the `finetune_class` column in the dataframe is expected to contain
+        soft/fuzzy labels (list/array of class membership probabilities) instead of hard labels.
+        Only used if `task_type` is "multiclass".
     masking_strategy_train : MaskingStrategy, default=askingMode.NONE
         Masking strategy for training dataset.
     masking_strategy_val : MaskingStrategy, default=MaskingMode.NONE
@@ -99,6 +113,7 @@ def prepare_training_datasets(
         num_outputs=num_outputs,
         time_explicit=time_explicit,
         classes_list=classes_list if classes_list is not None else [],
+        fuzzy_targets=fuzzy_targets,
         augment=augment,
         # masking_strategy=masking_strategy_train,
         label_jitter=label_jitter,
@@ -112,6 +127,7 @@ def prepare_training_datasets(
         num_outputs=num_outputs,
         time_explicit=time_explicit,
         classes_list=classes_list if classes_list is not None else [],
+        fuzzy_targets=fuzzy_targets,
         augment=False,  # No augmentation for validation
         # masking_strategy=masking_strategy_val,
         label_jitter=0,  # No jittering for validation
@@ -125,12 +141,49 @@ def prepare_training_datasets(
         num_outputs=num_outputs,
         time_explicit=time_explicit,
         classes_list=classes_list if classes_list is not None else [],
+        fuzzy_targets=fuzzy_targets,
         augment=False,  # No augmentation for testing
         # masking_strategy=masking_strategy_val,
         label_jitter=0,  # No jittering for testing
         label_window=0,  # No windowing for testing
     )
     return train_ds, val_ds, test_ds
+
+
+def fuzzy_confusion_matrix_soft(y_true_soft, y_pred_soft, normalize=False):
+    """
+    Compute a fully fuzzy confusion matrix where both true and predicted
+    labels are soft (probabilistic).
+
+    Parameters
+    ----------
+    y_true_soft : array-like of shape (n_samples, n_classes)
+        Soft true label matrix (e.g. one-hot or probabilistic ground truth).
+    y_pred_soft : array-like of shape (n_samples, n_classes)
+        Predicted probability matrix (e.g. from model.predict_proba()).
+    normalize : bool, optional (default=False)
+        If True, normalize each row to sum to 1.
+
+    Returns
+    -------
+    matrix : ndarray of shape (n_classes, n_classes)
+        Fuzzy confusion matrix summing probabilities over all samples.
+    """
+    y_true_soft = np.asarray(y_true_soft)
+    y_pred_soft = np.asarray(y_pred_soft)
+
+    # Sanity checks
+    assert y_true_soft.shape == y_pred_soft.shape, (
+        "y_true_soft and y_pred_soft must have the same shape (n_samples, n_classes)."
+    )
+
+    # Core computation: matrix multiplication
+    C = y_true_soft.T @ y_pred_soft
+
+    if normalize:
+        C = C / C.sum(axis=1, keepdims=True)
+
+    return C
 
 
 def evaluate_finetuned_model(
@@ -140,7 +193,6 @@ def evaluate_finetuned_model(
     batch_size: int,
     time_explicit: bool = False,
     classes_list: Optional[List[str]] = None,
-    # mask_positions: Optional[Sequence[int]] = None,
 ):
     """
     Evaluates a fine-tuned Presto model on a test dataset and calculates performance metrics.
@@ -176,62 +228,6 @@ def evaluate_finetuned_model(
     from sklearn.metrics import ConfusionMatrixDisplay, classification_report
     from torch.utils.data import DataLoader
 
-    # storage for full distributions if we need entropy
-    # all_probs_full: list[np.ndarray] = []
-
-    # if mask_positions is not None:
-    #     # for each mask‐from position, run the full classification_report,
-    #     # tag it with k, then concatenate
-    #     dfs = []
-    #     for k in mask_positions:
-    #         ds_k = InSeasonLabelledDataset(
-    #             test_ds.dataframe,
-    #             task_type=cast(Literal["binary", "multiclass"], test_ds.task_type),
-    #             num_outputs=cast(int, test_ds.num_outputs),
-    #             num_timesteps=test_ds.num_timesteps,
-    #             timestep_freq=test_ds.timestep_freq,
-    #             time_explicit=time_explicit,
-    #             classes_list=classes_list or [],
-    #             augment=False,
-    #             masking_strategy=MaskingStrategy(MaskingMode.FIXED, from_position=k),
-    #             label_jitter=0,
-    #             label_window=0,
-    #         )
-    #         df_k, cm, cm_norm = evaluate_finetuned_model(
-    #             finetuned_model,
-    #             ds_k,
-    #             num_workers,
-    #             batch_size,
-    #             time_explicit,
-    #             classes_list,
-    #             mask_positions=None,  # disable recursion
-    #         )
-    #         df_k["masked_ts_from_pos"] = k
-    #         # Get the timestamp for this mask position
-    #         if ds_k.timestep_freq == "month":
-    #             # Get the first sample's timestamps (assume all samples aligned)
-    #             ts = ds_k[0].timestamps
-    #             # k is 1-based, so subtract 1 for index
-    #             month_idx = min(k - 1, ts.shape[0] - 1)
-    #             month_num = int(ts[month_idx, 1])
-    #             import calendar
-
-    #             month_label = calendar.month_abbr[month_num]
-    #         elif ds_k.timestep_freq == "dekad":
-    #             ts = ds_k[0].timestamps
-    #             month_idx = min(k - 1, ts.shape[0] - 1)
-    #             month_num = int(ts[month_idx, 1])
-    #             day_num = int(ts[month_idx, 0])
-    #             import calendar
-
-    #             month_label = f"{calendar.month_abbr[month_num]} {day_num:02d}"
-    #         else:
-    #             month_label = "Unknown"
-
-    #         df_k["masked_ts_month_label"] = month_label
-    #         dfs.append(df_k)
-    #     return pd.concat(dfs, ignore_index=True), None, None
-
     # Put model in eval mode
     finetuned_model.eval()
 
@@ -256,110 +252,289 @@ def evaluate_finetuned_model(
                 batch = Predictors(**batch)
 
             model_output = finetuned_model(batch)
-            targets = batch.label.cpu().numpy().astype(int)
 
             if test_ds.task_type == "binary":
                 probs = torch.sigmoid(model_output).cpu().numpy()
                 preds = (probs > 0.5).astype(int)
             elif test_ds.task_type == "multiclass":
-                probs_all = (
-                    torch.softmax(model_output, dim=-1).cpu().numpy()
-                )  # shape (B,T,C)
+                probs = (
+                    torch.softmax(model_output, dim=-1)  # Softmax on the logits
+                    .squeeze(dim=[1, 2, 3])  # Remove space/time dimensions (B, C) remains
+                    .cpu()
+                    .numpy()
+                )  # shape (B,C)
+                targets = batch.label.float().squeeze(dim=[1, 2, 3]).cpu().numpy()
 
-                preds = np.argmax(probs_all, axis=-1, keepdims=True)
-                probs = np.max(probs_all, axis=-1, keepdims=True)
+                # preds = np.argmax(probs_all, axis=-1, keepdims=True)
+                # probs = np.max(probs_all, axis=-1, keepdims=True)
 
-                preds = preds[targets != NODATAVALUE]
-                probs = probs[targets != NODATAVALUE]
-                probs_all = probs_all[(targets != NODATAVALUE)[..., -1], :]
-                targets = targets[targets != NODATAVALUE]
+                # preds = preds[targets != NODATAVALUE]
+                # probs = probs[targets != NODATAVALUE]
+                # probs_all = probs_all[(targets != NODATAVALUE)[..., -1], :]
+                # targets = targets[targets != NODATAVALUE]
             else:
                 raise ValueError(f"Unsupported task type: {test_ds.task_type}")
 
             # Handle time-explicit predictions by filtering to valid timesteps only
             if time_explicit:
-                # Create a mask that identifies where targets are valid (not NODATAVALUE)
-                valid_mask = targets != NODATAVALUE
+                raise NotImplementedError
+                # # Create a mask that identifies where targets are valid (not NODATAVALUE)
+                # valid_mask = targets != NODATAVALUE
 
-                # Flatten everything with masks to keep only valid predictions
-                for i in range(targets.shape[0]):
-                    sample_valid_mask = valid_mask[i].flatten()
-                    if np.any(sample_valid_mask):
-                        # Only include samples that have at least one valid target
-                        sample_probs = probs[i].flatten()[sample_valid_mask]
-                        sample_preds = preds[i].flatten()[sample_valid_mask]
-                        sample_targets = targets[i].flatten()[sample_valid_mask]
+                # # Flatten everything with masks to keep only valid predictions
+                # for i in range(targets.shape[0]):
+                #     sample_valid_mask = valid_mask[i].flatten()
+                #     if np.any(sample_valid_mask):
+                #         # Only include samples that have at least one valid target
+                #         sample_probs = probs[i].flatten()[sample_valid_mask]
+                #         sample_preds = preds[i].flatten()[sample_valid_mask]
+                #         sample_targets = targets[i].flatten()[sample_valid_mask]
 
-                        all_probs.append(sample_probs)
-                        all_preds.append(sample_preds)
-                        all_targets.append(sample_targets)
+                #         all_probs.append(sample_probs)
+                #         all_preds.append(sample_preds)
+                #         all_targets.append(sample_targets)
             else:
-                # For non-time-explicit, just flatten and add everything
-                all_probs.append(probs.flatten())
-                all_preds.append(preds.flatten())
-                all_targets.append(targets.flatten())
+                all_probs.append(probs)
+                # all_preds.append(preds)
+                all_targets.append(targets)
 
     if time_explicit:
+        raise NotImplementedError
         all_probs = np.concatenate(all_probs) if all_probs else np.array([])
         all_preds = np.concatenate(all_preds) if all_preds else np.array([])
         all_targets = np.concatenate(all_targets) if all_targets else np.array([])
     else:
         all_probs = np.concatenate(all_probs)
-        all_preds = np.concatenate(all_preds)
+        # all_preds = np.concatenate(all_preds)
         all_targets = np.concatenate(all_targets)
 
-    # Map numeric indices to class names if necessary
-    if test_ds.task_type == "multiclass" and classes_list:
-        all_targets_classes = np.array(
-            [classes_list[x] if x != NODATAVALUE else "unknown" for x in all_targets]
-        )
-        all_preds_classes = np.array([classes_list[x] for x in all_preds])
+    # # Map numeric indices to class names if necessary
+    # if test_ds.task_type == "multiclass" and classes_list:
+    #     all_targets_classes = np.array(
+    #         [classes_list[x] if x != NODATAVALUE else "unknown" for x in all_targets]
+    #     )
+    #     all_preds_classes = np.array([classes_list[x] for x in all_preds])
 
-        # Remove any "unknown" targets before classification report
-        valid_indices = all_targets_classes != "unknown"
-        all_targets = list(all_targets_classes[valid_indices])
-        all_preds = list(all_preds_classes[valid_indices])
-        if len(all_probs) > 0:
-            all_probs_array = np.array(all_probs)[valid_indices]
-            all_probs = list(all_probs_array)
+    #     # Remove any "unknown" targets before classification report
+    #     valid_indices = all_targets_classes != "unknown"
+    #     all_targets = list(all_targets_classes[valid_indices])
+    #     all_preds = list(all_preds_classes[valid_indices])
+    #     if len(all_probs) > 0:
+    #         all_probs_array = np.array(all_probs)[valid_indices]
+    #         all_probs = list(all_probs_array)
+    #     else:
+    #         all_probs = []
+    # elif test_ds.task_type == "binary":
+    #     # For binary classification, convert to class names
+    #     all_targets = ["crop" if x > 0.5 else "not_crop" for x in all_targets]
+    #     all_preds = list(
+    #         np.array(["crop" if x > 0.5 else "not_crop" for x in all_preds])
+    #     )
+    #     classes_to_use = ["not_crop", "crop"]
+    # else:
+    #     # Just use the classes as is
+    #     classes_to_use = classes_list if classes_list is not None else []
+
+    # results = classification_report(
+    #     all_targets,
+    #     all_preds,
+    #     labels=classes_to_use if test_ds.task_type == "binary" else None,
+    #     output_dict=True,
+    #     zero_division=0,
+    # )
+
+    cm = fuzzy_confusion_matrix_soft(all_targets, all_probs, normalize=False)
+    cm_norm = fuzzy_confusion_matrix_soft(all_targets, all_probs, normalize=True)
+
+    cm = ConfusionMatrixDisplay(
+        cm,
+        display_labels=classes_list,
+    )
+    cm_norm = ConfusionMatrixDisplay(
+        cm_norm,
+        display_labels=classes_list,
+    )
+
+    # cm = ConfusionMatrixDisplay.from_predictions(
+    #     all_targets,
+    #     all_preds,
+    #     xticks_rotation="vertical",
+    #     labels=classes_to_use if test_ds.task_type == "binary" else None,
+    # )
+    # cm_norm = ConfusionMatrixDisplay.from_predictions(
+    #     all_targets,
+    #     all_preds,
+    #     xticks_rotation="vertical",
+    #     normalize="true",
+    #     labels=classes_to_use if test_ds.task_type == "binary" else None,
+    # )
+
+    # results_df = pd.DataFrame(results).transpose().reset_index()
+    # results_df.columns = pd.Index(
+    #     ["class", "precision", "recall", "f1-score", "support"]
+    # )
+
+    return None, cm, cm_norm
+
+
+def run_finetuning(
+    model: torch.nn.Module,
+    train_dl: DataLoader,
+    val_dl: DataLoader,
+    experiment_name: str,
+    output_dir: Union[Path, str],
+    loss_fn: torch.nn.Module,
+    optimizer: Union[torch.optim.Optimizer, None] = None,
+    scheduler: Union[torch.optim.lr_scheduler.LRScheduler, None] = None,
+    hyperparams: Hyperparams = Hyperparams(),
+    seed: int = DEFAULT_SEED,
+    setup_logging: bool = True,
+    freeze_layers: Optional[List[str]] = None,
+    unfreeze_epoch: Optional[int] = None,
+):
+    """Fine-tune a Presto model with optional temporally weighted supervision.
+
+    Args:
+        apply_temporal_weights: When ``True`` the temporal kernel weights are
+            folded into the loss; when ``False`` the priors are still passed to
+            the model (e.g. for attention MIL) but the loss defaults to
+            uniform-in-time weighting.
+        visualize_attention_every: Plot attention snapshots every N epochs
+            (set to ``None`` or ``0`` to disable).
+        attention_entropy_weight: Strength of entropy regularisation on temporal
+            attention (0 disables it).
+    """
+
+    output_dir = Path(output_dir)
+    _prometheo_setup(output_dir, experiment_name, setup_logging)
+    seed_everything()
+
+    train_loss = []
+    val_loss = []
+    best_loss: Optional[float] = None
+    best_model_dict = None
+    epochs_since_improvement = 0
+
+    # Track layers that were originally frozen
+    originally_frozen_layers = set()
+
+    # Freeze specified layers initially
+    if freeze_layers:
+        for name, param in model.named_parameters():
+            if any(layer in name for layer in freeze_layers):
+                if not param.requires_grad:
+                    originally_frozen_layers.add(name)
+                param.requires_grad = False
+                logger.info(f"Freezing layer: {name}")
+
+    for epoch in (pbar := tqdm(range(hyperparams.max_epochs), desc="Finetuning")):
+        model.train()
+
+        # Unfreezing logic
+        if freeze_layers and epoch == unfreeze_epoch:
+            for name, param in model.named_parameters():
+                if name not in originally_frozen_layers and any(
+                    layer in name for layer in freeze_layers
+                ):
+                    param.requires_grad = True
+                    logger.info(f"Unfreezing layer: {name}")
+
+        epoch_train_loss = 0.0
+
+        for batch in tqdm(train_dl, desc="Training", leave=False):
+            optimizer.zero_grad()
+            preds = model(batch)
+            targets = batch.label.to(device)
+            # if preds.dim() > 1 and preds.size(-1) > 1:
+            #     # multiclass case: targets should be class indices
+            #     # predictions are multiclass logits
+            #     targets = targets.long().squeeze(axis=-1)
+            # else:
+            #     # binary or regression case
+            #     targets = targets.float()
+            targets = targets.float()
+
+            # Compute loss
+            # loss = loss_fn(
+            #     preds[targets != NODATAVALUE], targets[targets != NODATAVALUE]
+            # )
+            loss = loss_fn(preds.squeeze(dim=[1, 2, 3]), targets.squeeze(dim=[1, 2, 3]))
+
+            epoch_train_loss += loss.item()
+            loss.backward()
+            optimizer.step()
+
+        train_loss.append(epoch_train_loss / len(train_dl))
+
+        model.eval()
+        all_preds, all_y = [], []
+
+        for batch in val_dl:
+            with torch.no_grad():
+                preds = model(batch)
+                targets = batch.label.to(device)
+
+                # if preds.dim() > 1 and preds.size(-1) > 1:
+                #     # multiclass case: targets should be class indices
+                #     # predictions are multiclass logits
+                #     targets = targets.long().squeeze(axis=-1)
+                # else:
+                #     # binary or regression case
+                #     targets = targets.float()
+                targets = targets.float()
+
+                # preds = preds[targets != NODATAVALUE]
+                # targets = targets[targets != NODATAVALUE]
+                all_preds.append(preds)
+                all_y.append(targets)
+
+        val_preds = torch.cat(all_preds)
+        val_targets = torch.cat(all_y)
+        current_val_loss = loss_fn(
+            val_preds.squeeze(dim=[1, 2, 3]), val_targets.squeeze(dim=[1, 2, 3])
+        ).item()
+        val_loss.append(current_val_loss)
+
+        if isinstance(scheduler, lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(current_val_loss)
         else:
-            all_probs = []
-    elif test_ds.task_type == "binary":
-        # For binary classification, convert to class names
-        all_targets = ["crop" if x > 0.5 else "not_crop" for x in all_targets]
-        all_preds = list(
-            np.array(["crop" if x > 0.5 else "not_crop" for x in all_preds])
+            scheduler.step()
+
+        if best_loss is None:
+            best_loss = val_loss[-1]
+            best_model_dict = deepcopy(model.state_dict())
+        else:
+            if val_loss[-1] < best_loss:
+                best_loss = val_loss[-1]
+                best_model_dict = deepcopy(model.state_dict())
+                epochs_since_improvement = 0
+            else:
+                epochs_since_improvement += 1
+                if epochs_since_improvement >= hyperparams.patience:
+                    logger.info("Early stopping!")
+                    break
+
+        description = (
+            f"Epoch {epoch + 1}/{hyperparams.max_epochs} | "
+            f"Train Loss: {train_loss[-1]:.4f} | "
+            f"Val Loss: {current_val_loss:.4f} | "
+            f"Best Loss: {best_loss:.4f}"
         )
-        classes_to_use = ["not_crop", "crop"]
-    else:
-        # Just use the classes as is
-        classes_to_use = classes_list if classes_list is not None else []
 
-    results = classification_report(
-        all_targets,
-        all_preds,
-        labels=classes_to_use if test_ds.task_type == "binary" else None,
-        output_dict=True,
-        zero_division=0,
-    )
+        if epochs_since_improvement > 0:
+            description += f" (no improvement for {epochs_since_improvement} epochs)"
+        else:
+            description += " (improved)"
 
-    cm = ConfusionMatrixDisplay.from_predictions(
-        all_targets,
-        all_preds,
-        xticks_rotation="vertical",
-        labels=classes_to_use if test_ds.task_type == "binary" else None,
-    )
-    cm_norm = ConfusionMatrixDisplay.from_predictions(
-        all_targets,
-        all_preds,
-        xticks_rotation="vertical",
-        normalize="true",
-        labels=classes_to_use if test_ds.task_type == "binary" else None,
-    )
+        pbar.set_description(description)
+        pbar.set_postfix(lr=scheduler.get_last_lr()[0])
+        logger.info(
+            f"PROGRESS after Epoch {epoch + 1}/{hyperparams.max_epochs}: {description}"
+        )  # Only log to file if console filters on "PROGRESS"
 
-    results_df = pd.DataFrame(results).transpose().reset_index()
-    results_df.columns = pd.Index(
-        ["class", "precision", "recall", "f1-score", "support"]
-    )
+    assert best_model_dict is not None
 
-    return results_df, cm, cm_norm
+    model.load_state_dict(best_model_dict)
+    model.eval()
+
+    return model
