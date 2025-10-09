@@ -20,7 +20,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from catboost import CatBoostClassifier, Pool
+from catboost import CatBoostRegressor, Pool
+from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
 from loguru import logger
 from prometheo.models import Presto
 from prometheo.models.presto.wrapper import load_presto_weights
@@ -28,19 +29,19 @@ from prometheo.predictors import Predictors
 from prometheo.utils import device
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
-    accuracy_score,
-    classification_report,
-    f1_score,
-    precision_score,
-    recall_score,
 )
-from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from worldcereal.utils.refdata import map_classes
 
-from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset, get_class_weights
-from worldcereal_cop4geoglam.finetuning_utils import get_class_mappings
+from worldcereal_cop4geoglam.datasets import (
+    Cop4GeoLabelledDataset,
+    get_class_weights_from_soft_targets,
+)
+from worldcereal_cop4geoglam.finetuning_utils import (
+    fuzzy_confusion_matrix_soft,
+    get_class_mappings,
+)
 
 
 class PrestoEmbeddingTrainer:
@@ -187,12 +188,12 @@ class PrestoEmbeddingTrainer:
         val_df = pd.read_parquet(self.data_dir / "val_df.parquet")
         test_df = pd.read_parquet(self.data_dir / "test_df.parquet")
 
-        orig_classes = sorted(train_df["finetune_class"].unique())
+        # self.classes_list = sorted(train_df["finetune_class"].unique()) --> self.classes_list
 
         # Load Presto model
         logger.info(f"Loading Presto model from {self.presto_model_path}...")
         num_timesteps = 12 if self.timestep_freq == "month" else 36
-        presto_model = Presto(num_outputs=len(orig_classes), regression=False)
+        presto_model = Presto(num_outputs=len(self.classes_list), regression=False)
         presto_model = load_presto_weights(presto_model, self.presto_model_path).to(
             device
         )
@@ -204,8 +205,9 @@ class PrestoEmbeddingTrainer:
             num_timesteps=num_timesteps,
             timestep_freq=self.timestep_freq,
             task_type="multiclass",
-            num_outputs=len(orig_classes),
-            classes_list=orig_classes,
+            num_outputs=len(self.classes_list),
+            classes_list=self.classes_list,
+            fuzzy_targets=True,
             augment=False,
             return_sample_id=True,
         )
@@ -214,8 +216,9 @@ class PrestoEmbeddingTrainer:
             num_timesteps=num_timesteps,
             timestep_freq=self.timestep_freq,
             task_type="multiclass",
-            num_outputs=len(orig_classes),
-            classes_list=orig_classes,
+            num_outputs=len(self.classes_list),
+            classes_list=self.classes_list,
+            fuzzy_targets=True,
             return_sample_id=True,
         )
         test_ds = Cop4GeoLabelledDataset(
@@ -223,8 +226,9 @@ class PrestoEmbeddingTrainer:
             num_timesteps=num_timesteps,
             timestep_freq=self.timestep_freq,
             task_type="multiclass",
-            num_outputs=len(orig_classes),
-            classes_list=orig_classes,
+            num_outputs=len(self.classes_list),
+            classes_list=self.classes_list,
+            fuzzy_targets=True,
             return_sample_id=True,
         )
 
@@ -286,7 +290,7 @@ class PrestoEmbeddingTrainer:
 
     def _setup_model(
         self, iterations=6000, early_stopping_rounds=25
-    ) -> CatBoostClassifier:
+    ) -> CatBoostRegressor:
         """Setup the CatBoost model."""
         logger.info("Setting up CatBoost model...")
 
@@ -295,10 +299,10 @@ class PrestoEmbeddingTrainer:
             loss_function = "Logloss"
             eval_metric = "F1"
         else:
-            loss_function = "MultiClass"
-            eval_metric = "MultiClass"
+            loss_function = "MultiRMSE"
+            eval_metric = "MultiRMSE"
 
-        model = CatBoostClassifier(
+        model = CatBoostRegressor(
             iterations=iterations,
             depth=6,
             learning_rate=0.05,
@@ -311,8 +315,9 @@ class PrestoEmbeddingTrainer:
             random_state=42,
             l2_leaf_reg=3,
             verbose=100,
-            class_names=self.classes_list,
+            # class_names=self.classes_list,
             train_dir=str(self.output_dir),
+            boosting_type="Plain",  # needed for GPU training
         )
 
         # Save model parameters to config
@@ -324,7 +329,7 @@ class PrestoEmbeddingTrainer:
 
         return model
 
-    def train(self) -> CatBoostClassifier:
+    def train(self) -> CatBoostRegressor:
         """Train the CatBoost model."""
         # Get training data
         trn_df, val_df, tst_df = self._get_training_data()
@@ -346,88 +351,109 @@ class PrestoEmbeddingTrainer:
             class_mappings=get_class_mappings(self.country),
         )
 
-        # Save class list
-        self.classes_list = sorted(train_val_df["finetune_class"].unique())
-        logger.info(f"Classes after mapping: {self.classes_list}")
-
-        # Remove samples to be ignored
-        train_val_df = train_val_df[train_val_df["finetune_class"] != "remove"]
-        tst_df = tst_df[tst_df["finetune_class"] != "remove"]
-
-        # Update class list after removing samples
-        self.classes_list = sorted(train_val_df["finetune_class"].unique())
-        logger.info(f"Final classes: {self.classes_list}")
-
-        # Apply downstream class mapping (default to identity mapping if not specified)
-        if self.downstream_classes is not None:
-            logger.info(f"Applying downstream class mapping: {self.downstream_classes}")
-
-            # Check that all finetune classes are covered in the mapping
-            missing_classes = set(self.classes_list) - set(
-                self.downstream_classes.keys()
-            )
-            if missing_classes:
-                logger.warning(
-                    f"Some classes are missing in the downstream mapping and will be removed: {missing_classes}. "
-                    f"A total of {(train_val_df['finetune_class'].isin(missing_classes)).sum()} samples will be removed from the training data."
-                )
-
-            # Remove samples with missing classes from the dataframes
-            train_val_df = train_val_df[
-                ~train_val_df["finetune_class"].isin(missing_classes)
+        self.target_column = "finetune_class"
+        self.classes_list = [
+                "maize",
+                "soybean",
+                "sesame",
+                "sweet_potato",
+                "cassava",
+                "pigeon pea",
+                "rice",
+                "other",
             ]
-            tst_df = tst_df[~tst_df["finetune_class"].isin(missing_classes)]
+        # Save class list
+        # self.classes_list = sorted(train_val_df["finetune_class"].unique())
+        # self.classes_list = [
+        #         "maize",
+        #         "soybean",
+        #         "sesame",
+        #         "sweet_potato",
+        #         "cassava",
+        #         "pigeon pea",
+        #         "rice",
+        #         "other",
+        #     ]
+        # logger.info(f"Classes after mapping: {self.classes_list}")
 
-            # Apply mapping to all dataframes
-            train_val_df["downstream_class"] = train_val_df["finetune_class"].map(
-                self.downstream_classes
-            )
-            tst_df["downstream_class"] = tst_df["finetune_class"].map(
-                self.downstream_classes
-            )
+        # # Remove samples to be ignored
+        # train_val_df = train_val_df[train_val_df["finetune_class"] != "remove"]
+        # tst_df = tst_df[tst_df["finetune_class"] != "remove"]
 
-            # Update classes list to downstream classes
-            self.classes_list = sorted(train_val_df["downstream_class"].unique())
-            logger.info(f"Classes after downstream mapping: {self.classes_list}")
+        # # Update class list after removing samples
+        # self.classes_list = sorted(train_val_df["finetune_class"].unique())
+        # logger.info(f"Final classes: {self.classes_list}")
 
-            # Set the target column for training
-            self.target_column = "downstream_class"
-        else:
-            # Default case: create identity mapping for finetune_classes
-            logger.info(
-                "No downstream_classes specified, using finetune_classes directly"
-            )
-            self.downstream_classes = {cls: cls for cls in self.classes_list}
-            train_val_df["downstream_class"] = train_val_df["finetune_class"]
-            tst_df["downstream_class"] = tst_df["finetune_class"]
-            logger.info(f"Using classes: {self.classes_list}")
+        # # Apply downstream class mapping (default to identity mapping if not specified)
+        # if self.downstream_classes is not None:
+        #     logger.info(f"Applying downstream class mapping: {self.downstream_classes}")
 
-            # Set the target column for training
-            self.target_column = "downstream_class"
+        #     # Check that all finetune classes are covered in the mapping
+        #     missing_classes = set(self.classes_list) - set(
+        #         self.downstream_classes.keys()
+        #     )
+        #     if missing_classes:
+        #         logger.warning(
+        #             f"Some classes are missing in the downstream mapping and will be removed: {missing_classes}. "
+        #             f"A total of {(train_val_df['finetune_class'].isin(missing_classes)).sum()} samples will be removed from the training data."
+        #         )
 
-        # Determine if binary classification based on final classes
-        if len(self.classes_list) == 2:
-            self.is_binary = True
-            logger.info(
-                f"Binary classification detected with classes: {self.classes_list}"
-            )
+        #     # Remove samples with missing classes from the dataframes
+        #     train_val_df = train_val_df[
+        #         ~train_val_df["finetune_class"].isin(missing_classes)
+        #     ]
+        #     tst_df = tst_df[~tst_df["finetune_class"].isin(missing_classes)]
 
-            # If binary classification with "other" class, ensure proper ordering
-            if "other" in self.classes_list:
-                target_class = [cls for cls in self.classes_list if cls != "other"][0]
-                # Ensure "other" is first (index 0) and target class is second (index 1)
-                self.classes_list = ["other", target_class]
-                logger.info(
-                    f"Binary classes reordered: {self.classes_list} (other=0, {target_class}=1)"
-                )
+        #     # Apply mapping to all dataframes
+        #     train_val_df["downstream_class"] = train_val_df["finetune_class"].map(
+        #         self.downstream_classes
+        #     )
+        #     tst_df["downstream_class"] = tst_df["finetune_class"].map(
+        #         self.downstream_classes
+        #     )
 
-                # Save target class name for reference
-                self.target_class_name = target_class
-        else:
-            self.is_binary = False
-            logger.info(
-                f"Multiclass classification with {len(self.classes_list)} classes: {self.classes_list}"
-            )
+        #     # Update classes list to downstream classes
+        #     self.classes_list = sorted(train_val_df["downstream_class"].unique())
+        #     logger.info(f"Classes after downstream mapping: {self.classes_list}")
+
+        #     # Set the target column for training
+        #     self.target_column = "downstream_class"
+        # else:
+        #     # Default case: create identity mapping for finetune_classes
+        #     logger.info(
+        #         "No downstream_classes specified, using finetune_classes directly"
+        #     )
+        #     self.downstream_classes = {cls: cls for cls in self.classes_list}
+        #     train_val_df["downstream_class"] = train_val_df["finetune_class"]
+        #     tst_df["downstream_class"] = tst_df["finetune_class"]
+        #     logger.info(f"Using classes: {self.classes_list}")
+
+        #     # Set the target column for training
+        #     self.target_column = "downstream_class"
+
+        # # Determine if binary classification based on final classes
+        # if len(self.classes_list) == 2:
+        #     self.is_binary = True
+        #     logger.info(
+        #         f"Binary classification detected with classes: {self.classes_list}"
+        #     )
+
+        #     # If binary classification with "other" class, ensure proper ordering
+        #     if "other" in self.classes_list:
+        #         target_class = [cls for cls in self.classes_list if cls != "other"][0]
+        #         # Ensure "other" is first (index 0) and target class is second (index 1)
+        #         self.classes_list = ["other", target_class]
+        #         logger.info(
+        #             f"Binary classes reordered: {self.classes_list} (other=0, {target_class}=1)"
+        #         )
+
+        #         # Save target class name for reference
+        #         self.target_class_name = target_class
+        # else:
+        #     self.is_binary = False
+        #     logger.info(
+        #         f"Multiclass classification with {len(self.classes_list)} classes: {self.classes_list}"
+        #     )
 
         # Get feature columns
         feat_cols = [c for c in train_val_df.columns if c.startswith("emb_")]
@@ -436,8 +462,9 @@ class PrestoEmbeddingTrainer:
         if self.balance:
             # Calculate class weights
             logger.info("Calculating class weights...")
-            class_weights = get_class_weights(
-                train_val_df[self.target_column].values,
+            target_probs = np.array(train_val_df[self.target_column].values.tolist())
+            class_weights = get_class_weights_from_soft_targets(
+                target_probs,
                 method="log",
                 # clip_range=(0.2, 20),
                 normalize=True,
@@ -459,20 +486,21 @@ class PrestoEmbeddingTrainer:
         tst_df["label"] = tst_df[self.target_column]
 
         # Save class information to config
-        self.config["classes"] = {
-            str(i): str(cls) for i, cls in enumerate(self.classes_list)
-        }
+        # self.config["classes"] = {
+        #     str(i): str(cls) for i, cls in enumerate(self.classes_list)
+        # }
+        self.config["classes"] = self.classes_list
         self.config["class_weights"] = {
             str(k): float(v) for k, v in class_weights.items()
         }
         self.config["balance"] = self.balance
         self.save_config()
 
-        # Update config with final class information
-        self.config["final_classes"] = self.classes_list
-        if hasattr(self, "target_class_name"):
-            self.config["target_class_name"] = self.target_class_name
-        self.save_config()
+        # # Update config with final class information
+        # self.config["final_classes"] = self.classes_list
+        # if hasattr(self, "target_class_name"):
+        #     self.config["target_class_name"] = self.target_class_name
+        # self.save_config()
 
         # Save processed data
         logger.info("Saving processed data...")
@@ -482,27 +510,34 @@ class PrestoEmbeddingTrainer:
         # Perform manual cross-validation
         num_folds = 5
         best_iters = []
-        skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
+        skf = MultilabelStratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
 
         # Extract features and labels
         X = train_val_df[self.feat_cols].values
+        # X = np.array(X.tolist())
         y = train_val_df[self.target_column].values
+        y = np.array(y.tolist())
 
         # Setup a cross-validation model
         cv_model = self._setup_model()
 
         for fold, (train_idx, val_idx) in enumerate(skf.split(X, y)):
             logger.info(f"Training fold {fold + 1}/{num_folds}...")
+            train_fold = np.array(train_val_df[self.feat_cols].iloc[train_idx].values.tolist())
+            train_fold_labels = np.array(train_val_df[self.target_column].iloc[train_idx].values.tolist())
+            weight_fold = np.array(train_val_df["weight"].iloc[train_idx].values.tolist())
             cv_train_pool = Pool(
-                data=train_val_df[self.feat_cols].iloc[train_idx],
-                label=train_val_df["label"].iloc[train_idx],
-                weight=train_val_df["weight"].iloc[train_idx],
+                data=train_fold,
+                label=train_fold_labels,
+                weight=weight_fold,
             )
-
+            val_fold = np.array(train_val_df[self.feat_cols].iloc[val_idx].values.tolist())
+            val_fold_labels = np.array(train_val_df[self.target_column].iloc[val_idx].values.tolist())
+            val_weight = np.array(train_val_df["weight"].iloc[val_idx].values.tolist())
             cv_val_pool = Pool(
-                data=train_val_df[self.feat_cols].iloc[val_idx],
-                label=train_val_df["label"].iloc[val_idx],
-                weight=train_val_df["weight"].iloc[val_idx],
+                data=val_fold,
+                label=val_fold_labels,
+                weight=val_weight,
             )
 
             cv_model.fit(cv_train_pool, eval_set=cv_val_pool)
@@ -516,11 +551,16 @@ class PrestoEmbeddingTrainer:
         final_model = self._setup_model(
             iterations=final_iterations, early_stopping_rounds=None
         )
+
+        trainval_data = np.array(train_val_df[self.feat_cols].values.tolist())
+        trainval_labels = np.array(train_val_df[self.target_column].values.tolist())
+        trainval_weight = np.array(train_val_df["weight"].values.tolist())
+
         final_model.fit(
             Pool(
-                data=train_val_df[self.feat_cols],
-                label=train_val_df["label"],
-                weight=train_val_df["weight"],
+                data=trainval_data,
+                label=trainval_labels,
+                weight=trainval_weight,
             ),
             verbose=100,
         )
@@ -536,7 +576,7 @@ class PrestoEmbeddingTrainer:
 
         return final_model
 
-    def save_model(self, model: CatBoostClassifier) -> None:
+    def save_model(self, model: CatBoostRegressor) -> None:
         """Save model in both CBM and ONNX formats."""
 
         # Save as CBM
@@ -558,63 +598,87 @@ class PrestoEmbeddingTrainer:
         )
         logger.info(f"Model saved as ONNX: {onnx_path}")
 
-    def evaluate(self, model: CatBoostClassifier, test_df: pd.DataFrame) -> dict:
+    def evaluate(self, model: CatBoostRegressor, test_df: pd.DataFrame) -> dict:
         """Evaluate the model on test data."""
         logger.info("Evaluating model...")
 
         # Get predictions
         preds = model.predict(test_df[self.feat_cols])
-        true_labels = test_df["label"].values
+        true_labels = np.array(test_df["label"].values.tolist())
 
-        # Classification report
-        report = classification_report(
-            true_labels, preds, output_dict=True, zero_division=0
-        )
-        report_df = pd.DataFrame(report).transpose().round(2)
-        report_df.to_csv(
-            self.output_dir / f"{self.cb_model_name}_classification_report.csv"
-        )
+        # # Classification report
+        # report = classification_report(
+        #     true_labels, preds, output_dict=True, zero_division=0
+        # )
+        # report_df = pd.DataFrame(report).transpose().round(2)
+        # report_df.to_csv(
+        #     self.output_dir / f"{self.cb_model_name}_classification_report.csv"
+        # )
 
-        logger.info("Evaluation results:")
-        logger.info("\n" + report_df.to_string(index=True))
+        # logger.info("Evaluation results:")
+        # logger.info("\n" + report_df.to_string(index=True))
 
         # Confusion matrices
         self._plot_confusion_matrices(true_labels, preds)
 
-        # Calculate metrics
-        metrics = self._calculate_metrics(true_labels, preds)
+        # # Calculate metrics
+        # metrics = self._calculate_metrics(true_labels, preds)
 
-        # Save metrics
-        with open(self.output_dir / f"{self.cb_model_name}_metrics.txt", "w") as f:
-            f.write("Test results:\n")
-            for key, value in metrics.items():
-                f.write(f"{key}: {value}\n")
-                logger.info(f"{key} = {value}")
+        # # Save metrics
+        # with open(self.output_dir / f"{self.cb_model_name}_metrics.txt", "w") as f:
+        #     f.write("Test results:\n")
+        #     for key, value in metrics.items():
+        #         f.write(f"{key}: {value}\n")
+        #         logger.info(f"{key} = {value}")
 
-        return metrics
+        # return metrics
+
+        # save predictions and targets
+        prediction_df = pd.DataFrame(preds, columns=[f"{c}" for c in self.classes_list])
+        prediction_df["sample_id"] = test_df["sample_id"].values
+        prediction_df["type"] = "prediction"
+        target_df = pd.DataFrame(true_labels, columns=[f"{c}" for c in self.classes_list])
+        target_df["sample_id"] = test_df["sample_id"].values
+        target_df["source"] = "target"
+        results_df = pd.concat([target_df, prediction_df], ignore_index=True)
+        results_df.to_parquet(self.output_dir / f"predictions_{self.cb_model_name}.parquet")
+        return results_df
+
 
     def _plot_confusion_matrices(
         self, true_labels: np.ndarray, preds: np.ndarray
     ) -> None:
         """Plot confusion matrices (absolute and normalized)."""
         fig_size = max(6, len(self.classes_list) * 0.45)
-
-        # Absolute confusion matrix
-        cm = ConfusionMatrixDisplay.from_predictions(
-            true_labels, preds, xticks_rotation="vertical"
-        )
         fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+        cm = fuzzy_confusion_matrix_soft(true_labels, preds)
+        # cm_df = pd.DataFrame(cm, index=self.classes_list, columns=self.classes_list)
+        # # Absolute confusion matrix
+        # cm = ConfusionMatrixDisplay.from_predictions(
+        #     true_labels, preds, xticks_rotation="vertical"
+        # )
+        cm =ConfusionMatrixDisplay(
+            cm,
+            display_labels=self.classes_list,
+        )
         cm.plot(ax=ax, cmap=plt.cm.Blues, colorbar=False)
         plt.setp(ax.get_xticklabels(), rotation=90, ha="center")
         plt.tight_layout()
         plt.savefig(self.output_dir / f"{self.cb_model_name}_CM_abs.png")
         plt.close(fig)
 
-        # Normalized confusion matrix
-        cm_norm = ConfusionMatrixDisplay.from_predictions(
-            true_labels, preds, normalize="true", xticks_rotation="vertical"
-        )
+        # # Normalized confusion matrix
+        # cm_norm = ConfusionMatrixDisplay.from_predictions(
+        #     true_labels, preds, normalize="true", xticks_rotation="vertical"
+        # )
         fig, ax = plt.subplots(figsize=(fig_size, fig_size))
+        cm_norm = fuzzy_confusion_matrix_soft(
+            true_labels, preds, normalize=True
+        )
+        cm_norm = ConfusionMatrixDisplay(
+            cm_norm,
+            display_labels=self.classes_list,
+        )
         cm_norm.plot(ax=ax, cmap=plt.cm.Blues, colorbar=False)
         for text in ax.texts:
             val = float(text.get_text())
@@ -624,36 +688,36 @@ class PrestoEmbeddingTrainer:
         plt.savefig(self.output_dir / f"{self.cb_model_name}_CM_norm.png")
         plt.close(fig)
 
-    def _calculate_metrics(self, true_labels: np.ndarray, preds: np.ndarray) -> dict:
-        """Calculate evaluation metrics."""
-        metrics = {}
+    # def _calculate_metrics(self, true_labels: np.ndarray, preds: np.ndarray) -> dict:
+    #     """Calculate evaluation metrics."""
+    #     metrics = {}
 
-        if len(self.classes_list) == 2:
-            # Binary classification - use the second class as positive label
-            pos_label = self.classes_list[1]
+    #     if len(self.classes_list) == 2:
+    #         # Binary classification - use the second class as positive label
+    #         pos_label = self.classes_list[1]
 
-            metrics["OA"] = round(accuracy_score(true_labels, preds), 3)
-            metrics["F1"] = round(f1_score(true_labels, preds, pos_label=pos_label), 3)
-            metrics["Precision"] = round(
-                precision_score(true_labels, preds, pos_label=pos_label), 3
-            )
-            metrics["Recall"] = round(
-                recall_score(true_labels, preds, pos_label=pos_label), 3
-            )
-        else:
-            # Multiclass classification
-            metrics["OA"] = round(accuracy_score(true_labels, preds), 3)
-            metrics["F1"] = round(f1_score(true_labels, preds, average="macro"), 3)
-            metrics["Precision"] = round(
-                precision_score(true_labels, preds, average="macro"), 3
-            )
-            metrics["Recall"] = round(
-                recall_score(true_labels, preds, average="macro"), 3
-            )
+    #         metrics["OA"] = round(accuracy_score(true_labels, preds), 3)
+    #         metrics["F1"] = round(f1_score(true_labels, preds, pos_label=pos_label), 3)
+    #         metrics["Precision"] = round(
+    #             precision_score(true_labels, preds, pos_label=pos_label), 3
+    #         )
+    #         metrics["Recall"] = round(
+    #             recall_score(true_labels, preds, pos_label=pos_label), 3
+    #         )
+    #     else:
+    #         # Multiclass classification
+    #         metrics["OA"] = round(accuracy_score(true_labels, preds), 3)
+    #         metrics["F1"] = round(f1_score(true_labels, preds, average="macro"), 3)
+    #         metrics["Precision"] = round(
+    #             precision_score(true_labels, preds, average="macro"), 3
+    #         )
+    #         metrics["Recall"] = round(
+    #             recall_score(true_labels, preds, average="macro"), 3
+    #         )
 
-        return metrics
+    #     return metrics
 
-    def _plot_feature_importance(self, model: CatBoostClassifier) -> None:
+    def _plot_feature_importance(self, model: CatBoostRegressor) -> None:
         """Plot feature importance."""
         logger.info("Plotting feature importance...")
         ft_imp = model.get_feature_importance()
@@ -804,10 +868,11 @@ def main() -> None:
     # for croptype
     balance = True
     country = "mozambique"
-    modelversion = "1"
-    finetune_classes = "CROPTYPE_Mozambique_no_mixed"
+    modelversion = "3"
+    finetune_classes = "CROPTYPE_Mozambique_fuzzy"
     detector = "croptype"
-    presto_model_name = "presto-prometheo-cop4geoglam-exp_points_no_agroforestry_no_sugarcane_cowpea-month-CROPTYPE_Mozambique_no_mixed-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509251303"
+
+    presto_model_name = "presto-prometheo-cop4geoglam-test-fuzzy-month-CROPTYPE_Mozambique_fuzzy-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510081032"
     # downstream_classes = {
     #     "temporary_crops": "cropland",
     #     "temporary_grasses": "other",
@@ -825,12 +890,12 @@ def main() -> None:
     # set up paths and filenames
     presto_run_tag = presto_model_name.split("-")[-1]
     cb_model_name = f"Presto_{presto_run_tag}_DownstreamCatBoost_{detector}_v{modelversion}_balance={balance}"
-    presto_model_path = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/presto/v{modelversion}/{presto_model_name}/{presto_model_name}.pt"
+    presto_model_path = f"/projects/worldcereal/COP4GEOGLAM/{country}/models/presto/v{modelversion}/{presto_model_name}/{presto_model_name}.pt"
     data_dir = (
          f"{Path(presto_model_path).parent}"
     )
     output_dir = (
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/models/catboost/v{modelversion}/{detector}/{cb_model_name}"
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/models/catboost/v{modelversion}/{detector}/{cb_model_name}"
     )
 
     if USE_MANUAL_CONFIG:
