@@ -11,7 +11,19 @@ from sklearn.metrics import (
 from tqdm import tqdm
 
 
-def getClass(test_df,class_list,source="target",threshold=None):
+def getClass(test_df, class_list, source="target", threshold=None):
+    """
+    Determines the class for each row in the DataFrame based on thresholds.
+
+    Args:
+        test_df (pd.DataFrame): DataFrame containing the data.
+        class_list (list): List of valid class names.
+        source (str): Either "target" or "prediction" to specify the source of data.
+        thresholds (float or list): A single threshold value or a list of thresholds for each class.
+
+    Returns:
+        list: List of determined classes for each row.
+    """
     if source == "target":
         suffix = "_true"
     elif source == "prediction":
@@ -19,29 +31,38 @@ def getClass(test_df,class_list,source="target",threshold=None):
     else:
         raise ValueError("source must be 'target' or 'prediction'")
 
-    crop_types_single = [col.replace(suffix,"") for col in test_df.columns if col.endswith(suffix)][:-2]
-    if threshold is None:
-        threshold = 1 / (len(crop_types_single) -1)
+    crop_types_single = [col.replace(suffix, "") for col in test_df.columns if col.endswith(suffix)][:-2]
 
-    #in the target labels, any value above 0 is considered present
+    # If thresholds is None, set a default threshold for all classes
+    if threshold is None:
+        threshold = [1 / (len(crop_types_single) - 1)] * len(crop_types_single)
+    elif isinstance(threshold, (int, float)):
+        threshold = [threshold] * len(crop_types_single)
+    elif len(threshold) != len(crop_types_single):
+        raise ValueError("Thresholds must have the same length as the number of classes.")
+
+    # In the target labels, any value above 0 is considered present
     if source == "target":
-        threshold = 0
+        threshold = [0] * len(crop_types_single)
+
     target_classes = []
-    for i, row in test_df.iterrows():
-        #for which columns is the value higher than threshold
+    for _, row in test_df.iterrows():
+        # Determine which columns have values higher than their respective thresholds
         classes = []
-        for crop in crop_types_single:
-            if row[f'{crop}{suffix}'] > threshold:
+        for crop, thr in zip(crop_types_single, threshold):
+            if row[f'{crop}{suffix}'] > thr:
                 classes.append(crop)
-        #create a string with the classes separated by x
+
+        # Create a string with the classes separated by 'x'
         target_class = "x".join(classes)
 
         if "x" in target_class:
-            #check if the class is in the acceptable list
+            # Check if the class is in the acceptable list
             if target_class not in class_list:
                 target_class = "other"
 
         target_classes.append(target_class)
+
     return target_classes
 
 def getOA_threshold(predictions, class_list, threshold=0.5):
@@ -79,9 +100,7 @@ def getF1_threshold(predictions,class_list,threshold=0.5):
     average_F1 = sum(F1_values[cls] for cls in class_list) / len(class_list)
     return average_F1
 
-
-
-def determineOptimalThreshold(predictions, class_list, indicator = "average_F1",makePlot=False,output_folder=None):
+def determineOptimalThreshold(predictions, class_list, indicator = "average_F1", makePlot=False, output_folder=None,assignOther = False):
 
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
     predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
@@ -198,6 +217,7 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
     disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}.png'), bbox_inches='tight')
 
 
+
 if __name__ == "__main__":
 
 
@@ -222,11 +242,10 @@ if __name__ == "__main__":
         ]
 
     #OA analysis
-    #OA_threshold, OA = determineOptimalThreshold(predictions,class_list,"OA",makePlot=True,output_folder=folder)
+    OA_threshold, OA = determineOptimalThreshold(predictions,class_list,"OA",makePlot=True,output_folder=folder)
 
     #average F1 analysis
     F1_threshold, F1 = determineOptimalThreshold(predictions,class_list,"average_F1",makePlot=True,output_folder=folder)
-
 
     #Create confusion matrix for the best F1 threshold
     createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold)
