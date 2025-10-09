@@ -1,8 +1,10 @@
 import glob
 import os
+import warnings
 
 import pandas as pd
 from matplotlib import pyplot as plt
+from sklearn.exceptions import UndefinedMetricWarning
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     classification_report,
@@ -10,6 +12,7 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 
+warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 def getClass(test_df, class_list, source="target", threshold=None):
     """
@@ -98,9 +101,10 @@ def getF1_threshold(predictions,class_list,threshold=0.5):
             F1 = 0.0
         F1_values[cls] = F1
     average_F1 = sum(F1_values[cls] for cls in class_list) / len(class_list)
+    print(f"{threshold}: {average_F1}")
     return average_F1
 
-def determineOptimalThreshold(predictions, class_list, indicator = "average_F1", makePlot=False, output_folder=None,assignOther = False):
+def determineOptimalThreshold(predictions, class_list, indicator = "average_F1", makePlot=False, output_folder=None):
 
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
     predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
@@ -207,16 +211,16 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
     test["target_class"] = getClass(test,class_list,source="target",threshold=threshold)
     test["predicted_class"] = getClass(test,class_list,source="prediction",threshold=threshold)
 
+    F1 = getF1_threshold(predictions,class_list,threshold=threshold)
+
     cm = confusion_matrix(test["target_class"], test["predicted_class"], labels=test["target_class"].unique())
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=test["target_class"].unique())
     disp.plot(xticks_rotation='vertical')
     #add title with threshold value
-    plt.title(f'Confusion Matrix (threshold={threshold})')
+    plt.title(f'Confusion Matrix: F1: {F1:.2f}')
     plt.show()
     # Save confusion matrix
     disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}.png'), bbox_inches='tight')
-
-
 
 if __name__ == "__main__":
 
@@ -239,6 +243,17 @@ if __name__ == "__main__":
             "maizexcassava",
             "cassavaxpigeon pea",
             "maizexcassavaxpigeon pea",
+        ]
+
+    class_list_single = [
+            "maize",
+            "soybean",
+            "sesame",
+            "sweet_potato",
+            "cassava",
+            "pigeon pea",
+            "rice",
+            "other",
         ]
 
     #OA analysis
