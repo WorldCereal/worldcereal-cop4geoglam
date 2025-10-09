@@ -13,9 +13,16 @@ Outputs are written as NetCDF files preserving original geospatial metadata.
 
 import json
 import logging
+import tempfile
 from pathlib import Path
 
+# from typing import Optional
+import requests
 import xarray as xr
+
+# import onnxruntime as ort
+# import numpy as np
+from catboost import CatBoostRegressor
 from pyproj import CRS
 from worldcereal.openeo.feature_extractor import extract_presto_embeddings
 from worldcereal.openeo.inference import apply_inference
@@ -24,7 +31,7 @@ from worldcereal.parameters import CropLandParameters, CropTypeParameters
 NODATAVALUE = 65535
 
 logging.basicConfig(level=logging.INFO)
-
+logger = logging.getLogger(__name__)
 
 def reconstruct_dataset(arr: xr.DataArray, ds: xr.Dataset) -> xr.Dataset:
     """Reconstruct CRS attributes."""
@@ -133,7 +140,7 @@ def run_full_mapping(
     croptype_classifier_params.update({"ignore_dependencies": True})
     if croptype_classifier_model_url:
         croptype_classifier_params["classifier_url"] = croptype_classifier_model_url
-    croptype = apply_inference(inarr=croptype_features, parameters=croptype_classifier_params)
+    croptype = apply_inference_regressor(inarr=croptype_features, parameters=croptype_classifier_params)
     print(
         f"Croptype classification done: shape={croptype.shape}; bands={list(croptype.bands.values)}"
     )
@@ -141,25 +148,124 @@ def run_full_mapping(
     return cropland_features, croptype_features, cropland, croptype
 
 
+def load_and_prepare_regressor_model(model_path: str, path_to_config: str='') -> tuple[CatBoostRegressor, list[str]]:
+    """Load a CatBoost regressor model from a local file or URL, and its configuration.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the CatBoost model file (local or URL).
+    path_to_config : Optional[str]
+        Path to the model configuration JSON file. Required if loading from URL.
+
+    Returns
+    -------
+    model : CatBoostRegressor
+        The loaded CatBoost regressor model.
+    label_names : list[str]
+        List of label names (classes) if available in the configuration, otherwise an empty list.
+
+    Raises
+    ------
+    ValueError
+        If loading the model from a URL and path_to_config is not provided.
+    """
+
+    # Download model if URL
+    if model_path.startswith("http://") or model_path.startswith("https://"):
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            response = requests.get(model_path)
+            tmp.write(response.content)
+            tmp_path = tmp.name
+            if path_to_config == '':
+                raise ValueError("When loading model from URL, path_to_config must be provided.")
+    else:
+        path_to_config = str(list(Path(model_path).parent.glob("*config.json"))[0])
+        tmp_path = model_path
+
+    with open(path_to_config) as f:
+        model_config = json.load(f)
+        label_names = model_config.get("classes", [])
+        if len(label_names) == 0:
+            raise ValueError("Model configuration does not include 'classes' key or it is empty.")
+
+    model = CatBoostRegressor()
+    model.load_model(tmp_path)
+
+    return model, label_names
+
+def apply_inference_regressor(inarr: xr.DataArray, parameters: dict, ) -> xr.DataArray:
+    """
+    Apply a CatBoost regressor model to an input xarray DataArray.
+    This function loads a regressor model from the specified URL or local path, applies it to the input data,
+    and returns the regression results as a new DataArray with appropriate dimensions and coordinates.
+    Parameters
+    ----------
+    inarr : xr.DataArray
+        Input data array with dimensions ("bands", "x", "y").
+    parameters : dict
+        Dictionary containing model parameters. Must include "classifier_url" key.
+    Returns
+    -------
+    xr.DataArray
+        Output data array containing regression results, with dimensions ("bands", "y", "x").
+    Raises
+    ------
+    ValueError
+        If "classifier_url" is not present in parameters.
+    """
+
+    if "classifier_url" not in parameters:
+        raise ValueError('Missing required parameter "classifier_url"')
+    classifier_url = parameters.get("classifier_url")
+    logger.info(f'Loading regressor model from "{classifier_url}"')
+    if not isinstance(classifier_url, str):
+        classifier_url = str(classifier_url)
+    # shape and indices for output ("xy", "bands")
+    x_coords, y_coords = inarr.x.values, inarr.y.values
+    inarr = inarr.transpose("bands", "x", "y").stack(xy=["x", "y"]).transpose()  # Transpose to xy since CatBoost expects this
+
+    model, output_labels = load_and_prepare_regressor_model(classifier_url)
+
+    # Run catboost regression
+    logger.info("Catboost regression with input shape: %s", inarr.shape)
+    regression = model.predict(inarr.values)
+    logger.info("Regression done with shape: %s", inarr.shape)
+
+    regression_da = xr.DataArray(
+        regression.reshape((len(output_labels), len(x_coords), len(y_coords))),
+        dims=["bands", "x", "y"],
+        coords={
+            "bands": output_labels,
+            "x": x_coords,
+            "y": y_coords,
+        },
+    ).transpose("bands", "y", "x")  # openEO expects yx order after the UDF
+
+    return regression_da
+
+
 def main():
     """Main function to process all NetCDF files in the input directory."""
     # Manually define arguments here
     logging.info("Starting.")
     country = "mozambique"
-    exp_tag = "local_with_mixed_crop_class"
+    exp_tag = "local_with_fuzzy_class"
     input_dir = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/PSU_preprocessed_inputs"
+        # f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/PSU_preprocessed_inputs"
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/PSU_preprocessed_inputs"
     )
     output_dir = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{exp_tag}"
+        # f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{exp_tag}"
+        f"/projects/worldcereal/COP4GEOGLAM/{country}/production/{exp_tag}"
     )
     target_date = None
 
     # Specify model URLs (override as needed). You can leave any as None to use defaults
-    cropland_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v0/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104_encoder.pt"
-    croptype_feature_model_url = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v1/presto-prometheo-cop4geoglam-exp_points_with_mixed_crops_class-month-CROPTYPE_Mozambique_mixed_class-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510011045/presto-prometheo-cop4geoglam-exp_points_with_mixed_crops_class-month-CROPTYPE_Mozambique_mixed_class-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510011045_encoder.pt"
+    cropland_feature_model_url = "/projects/worldcereal/COP4GEOGLAM/mozambique/models/presto/cropland/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104_encoder.pt"
+    croptype_feature_model_url = "/projects/worldcereal/COP4GEOGLAM/mozambique/models/presto/v3/presto-prometheo-cop4geoglam-test-fuzzy-month-CROPTYPE_Mozambique_fuzzy-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510081032/presto-prometheo-cop4geoglam-test-fuzzy-month-CROPTYPE_Mozambique_fuzzy-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510081032_encoder.pt"
     cropland_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202509261104_DownstreamCatBoost_cropland_v0_balance%3DTrue.onnx"
-    croptype_classifier_model_url = "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202510011045_DownstreamCatBoost_croptype_v1_balance%3DTrue.onnx"
+    croptype_classifier_model_url = "/projects/worldcereal/COP4GEOGLAM/mozambique/models/catboost/v3/croptype/Presto_run=202510081032_DownstreamCatBoost_croptype_v3_balance=True/Presto_run=202510081032_DownstreamCatBoost_croptype_v3_balance=True.cbm"
 
     input_files = list(input_dir.rglob("*.nc"))
 
