@@ -398,6 +398,14 @@ def run_finetuning(
     _prometheo_setup(output_dir, experiment_name, setup_logging)
     seed_everything()
 
+    # Set model path
+    finetuned_model_path = output_dir / f"{experiment_name}.pt"
+    finetuned_encoder_path = output_dir / f"{experiment_name}_encoder.pt"
+    if finetuned_model_path.is_file():
+        raise FileExistsError(
+            f"Model file {finetuned_model_path} already exists. Choose a different directory or experiment name."
+        )
+
     train_loss = []
     val_loss = []
     best_loss: Optional[float] = None
@@ -525,5 +533,13 @@ def run_finetuning(
 
     model.load_state_dict(best_model_dict)
     model.eval()
+
+    # Save the best model
+    torch.save(model.state_dict(), finetuned_model_path)
+
+    # Save just the encoder
+    encoder_model = deepcopy(model)
+    encoder_model.head = None
+    torch.save(encoder_model.state_dict(), finetuned_encoder_path)
 
     return model
