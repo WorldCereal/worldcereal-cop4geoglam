@@ -2,7 +2,9 @@ import glob
 import os
 import warnings
 
+import numpy as np
 import pandas as pd
+import xarray as xr
 from matplotlib import pyplot as plt
 from sklearn.exceptions import UndefinedMetricWarning
 from sklearn.metrics import (
@@ -34,7 +36,9 @@ def getClass(test_df, class_list, source="target", threshold=None):
     else:
         raise ValueError("source must be 'target' or 'prediction'")
 
-    crop_types_single = [col.replace(suffix, "") for col in test_df.columns if col.endswith(suffix)][:-2]
+    crop_types_single = [col.replace(suffix, "") for col in test_df.columns if col.endswith(suffix)]
+    #only select the crop types that are in the class_list
+    crop_types_single = [crop for crop in crop_types_single if crop in class_list]
 
     # If thresholds is None, set a default threshold for all classes
     if threshold is None:
@@ -70,7 +74,7 @@ def getClass(test_df, class_list, source="target", threshold=None):
 
 def getOA_threshold(predictions, class_list, threshold=0.5):
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
-    predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
+    predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
     test = predictions.merge(targets, on="sample_id", suffixes=('_pred', '_true'))
 
@@ -83,7 +87,7 @@ def getOA_threshold(predictions, class_list, threshold=0.5):
 
 def getF1_threshold(predictions,class_list,threshold=0.5):
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
-    predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
+    predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
     test = predictions.merge(targets, on="sample_id", suffixes=('_pred', '_true'))
 
@@ -107,7 +111,7 @@ def getF1_threshold(predictions,class_list,threshold=0.5):
 def determineOptimalThreshold(predictions, class_list, indicator = "average_F1", makePlot=False, output_folder=None):
 
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
-    predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
+    predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
     test = predictions.merge(targets, on="sample_id", suffixes=('_pred', '_true'))
 
@@ -204,7 +208,7 @@ def determineOptimalThreshold(predictions, class_list, indicator = "average_F1",
 def createConfusionMatrix_threshold(predictions, output_folder, class_list, threshold=0.5):
 
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
-    predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
+    predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
     test = predictions.merge(targets, on="sample_id", suffixes=('_pred', '_true'))
 
@@ -222,12 +226,58 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
     # Save confusion matrix
     disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}.png'), bbox_inches='tight')
 
+def applyThreshold(nc_file,single_class_list,class_list,output_folder,thresholds):
+
+    #Load the NC file
+    ds = xr.open_dataset(nc_file)
+
+    class_list = [cls for cls in class_list if cls in ds.data_vars]
+
+    if isinstance(thresholds, (int, float)):
+        thresholds = [thresholds] * len(single_class_list)
+
+    #Create an empty array to store the temp (type = string)
+    temp = np.full(ds[class_list[0]].shape, '', dtype=object)
+    for i, crop in enumerate(class_list):
+        #make sure that 65535 values are set to 0
+        ds[crop] = ds[crop].where(ds[crop] != 65535, 0)
+        crop_mask = ds[crop] > thresholds[i]
+        temp = np.where(crop_mask, np.where(temp == '', crop, temp + 'x' + crop), temp)
+
+    class_list.append("")
+    #check whether the class is in the acceptable list, if not set to "other"
+    temp = np.where(np.isin(temp, class_list), temp, "other")
+
+    # give each unique value an integer according to its index in class_list
+    int_map = {cls: idx for idx, cls in enumerate(class_list)}
+    int_array = np.vectorize(int_map.get)(temp)
+    #set all values that are "" to np.nan
+    int_array = np.where(temp == "", np.nan, int_array)
+
+    #define the output file name
+    output_file = os.path.join(output_folder, os.path.basename(nc_file).replace('.nc', f'_thr{thresholds[0]}_classified.tif'))
+
+    # copy the ds to a new dataset to avoid modifying the original dataset
+    ds_out = ds.copy()
+    # Add the integer array as a new variable to the dataset
+    ds_out['classification'] = ds_out[class_list[0]].copy(data=int_array)
+    #save the ds_out
+    ds_out['classification'].attrs['long_name'] = 'Crop type classification'
+    ds_out['classification'].attrs['classes'] = ','.join(class_list)
+    ds_out['classification'].attrs['thresholds'] = ','.join([str(thr) for thr in thresholds])
+    ds_out['classification'].attrs['nodata'] = np.nan
+    #save as nc file
+    ds_out.to_netcdf(output_file.replace('.tif', '.nc'))
+    ds_out.close()
+
 if __name__ == "__main__":
 
+    main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/"
 
-    folder = '/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/fuzzy_test/'
+    nc_folder = os.path.join(main_folder,"production","local_with_fuzzy_class_10samples/")
+    folder = os.path.join(main_folder,"fuzzy_test")
 
-    pred_file = glob.glob(os.path.join(folder, 'predictions*.parquet'))[0]
+    pred_file = glob.glob(os.path.join(nc_folder, '*test_predictions.parquet'))[0]
 
     predictions = pd.read_parquet(pred_file)
 
@@ -264,3 +314,8 @@ if __name__ == "__main__":
 
     #Create confusion matrix for the best F1 threshold
     createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold)
+
+    nc_files = glob.glob(os.path.join(nc_folder, '*croptype_masked.nc'))
+
+    for nc_file in tqdm(nc_files,desc="Processing nc files"):
+        applyThreshold(nc_file,class_list,class_list_single,output_folder=folder,thresholds=F1_threshold)
