@@ -226,18 +226,19 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
     # Save confusion matrix
     disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}.png'), bbox_inches='tight')
 
-def applyThreshold(nc_file,single_class_list,class_list,output_folder,thresholds):
+def applyThreshold(nc_file,class_list,output_folder,thresholds):
 
     #Load the NC file
     ds = xr.open_dataset(nc_file)
 
-    class_list = [cls for cls in class_list if cls in ds.data_vars]
+    single_class_list = [cls for cls in class_list if 'x' not in cls]
+    single_class_list = [cls for cls in single_class_list if cls in ds.data_vars]
 
     if isinstance(thresholds, (int, float)):
         thresholds = [thresholds] * len(single_class_list)
 
     #Create an empty array to store the temp (type = string)
-    temp = np.full(ds[class_list[0]].shape, '', dtype=object)
+    temp = np.full(ds[single_class_list[0]].shape, '', dtype=object)
     for i, crop in enumerate(class_list):
         #make sure that 65535 values are set to 0
         ds[crop] = ds[crop].where(ds[crop] != 65535, 0)
@@ -318,4 +319,4 @@ if __name__ == "__main__":
     nc_files = glob.glob(os.path.join(nc_folder, '*croptype_masked.nc'))
 
     for nc_file in tqdm(nc_files,desc="Processing nc files"):
-        applyThreshold(nc_file,class_list,class_list_single,output_folder=folder,thresholds=F1_threshold)
+        applyThreshold(nc_file,class_list,output_folder=folder,thresholds=F1_threshold)
