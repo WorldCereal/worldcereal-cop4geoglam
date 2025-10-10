@@ -256,7 +256,7 @@ def applyThreshold(nc_file,class_list,output_folder,thresholds):
     int_array = np.where(temp == "", np.nan, int_array)
 
     #define the output file name
-    output_file = os.path.join(output_folder, os.path.basename(nc_file).replace('.nc', f'_thr{thresholds[0]}_classified.tif'))
+    output_file = os.path.join(output_folder, os.path.basename(nc_file).replace('.nc', f'_thr{thresholds[0]}_classified.nc'))
 
     # copy the ds to a new dataset to avoid modifying the original dataset
     ds_out = ds.copy()
@@ -268,7 +268,7 @@ def applyThreshold(nc_file,class_list,output_folder,thresholds):
     ds_out['classification'].attrs['thresholds'] = ','.join([str(thr) for thr in thresholds])
     ds_out['classification'].attrs['nodata'] = np.nan
     #save as nc file
-    ds_out.to_netcdf(output_file.replace('.tif', '.nc'))
+    ds_out.to_netcdf(output_file)
     ds_out.close()
 
 if __name__ == "__main__":
