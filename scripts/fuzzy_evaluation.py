@@ -239,7 +239,7 @@ def applyThreshold(nc_file,class_list,output_folder,thresholds):
 
     #Create an empty array to store the temp (type = string)
     temp = np.full(ds[single_class_list[0]].shape, '', dtype=object)
-    for i, crop in enumerate(class_list):
+    for i, crop in enumerate(single_class_list):
         #make sure that 65535 values are set to 0
         ds[crop] = ds[crop].where(ds[crop] != 65535, 0)
         crop_mask = ds[crop] > thresholds[i]
@@ -277,10 +277,11 @@ if __name__ == "__main__":
 
     nc_folder = os.path.join(main_folder,"production","local_with_fuzzy_class_10samples/")
     folder = os.path.join(main_folder,"fuzzy_test")
+    os.makedirs(folder, exist_ok=True)
 
-    pred_file = glob.glob(os.path.join(nc_folder, '*test_predictions.parquet'))[0]
+    #pred_file = glob.glob(os.path.join(nc_folder, '*test_predictions.parquet'))[0]
 
-    predictions = pd.read_parquet(pred_file)
+    #predictions = pd.read_parquet(pred_file)
 
     class_list = [
             "maize",
@@ -308,15 +309,17 @@ if __name__ == "__main__":
         ]
 
     #OA analysis
-    OA_threshold, OA = determineOptimalThreshold(predictions,class_list,"OA",makePlot=True,output_folder=folder)
+    #OA_threshold, OA = determineOptimalThreshold(predictions,class_list,"OA",makePlot=True,output_folder=folder)
 
     #average F1 analysis
-    F1_threshold, F1 = determineOptimalThreshold(predictions,class_list,"average_F1",makePlot=True,output_folder=folder)
+    #F1_threshold, F1 = determineOptimalThreshold(predictions,class_list,"average_F1",makePlot=True,output_folder=folder)
 
     #Create confusion matrix for the best F1 threshold
-    createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold)
+    #createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold)
 
     nc_files = glob.glob(os.path.join(nc_folder, '*croptype_masked.nc'))
+
+    F1_threshold = 0.24
 
     for nc_file in tqdm(nc_files,desc="Processing nc files"):
         applyThreshold(nc_file,class_list,output_folder=folder,thresholds=F1_threshold)
