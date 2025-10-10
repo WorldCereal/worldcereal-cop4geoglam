@@ -4,7 +4,7 @@ import shutil
 import time
 from functools import partial
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import geopandas as gpd
 import openeo
@@ -15,7 +15,7 @@ from openeo import BatchJob
 from openeo.extra.job_management import MultiBackendJobManager
 from openeo_gfmap import BoundingBoxExtent, TemporalContext
 from openeo_gfmap.backend import cdse_connection
-from worldcereal.job import WorldCerealProductType, create_inference_process_graph
+from worldcereal.job import WorldCerealProductType
 from worldcereal.parameters import (
     ClassifierParameters,
     CropLandParameters,
@@ -25,6 +25,7 @@ from worldcereal.parameters import (
 )
 
 from worldcereal_cop4geoglam.constants import PRODUCTION_MODELS_URLS
+from worldcereal_cop4geoglam.inference import create_inference_process_graph
 
 ONNX_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/onnx_deps_python311.zip"
 FEATURE_DEPS_URL = "https://s3.waw3-1.cloudferro.com/swift/v1/project_dependencies/torch_deps_python311.zip"
@@ -98,7 +99,7 @@ class InferenceJobManager(MultiBackendJobManager):
         logger.success("Job completed")
 
 
-def create_worldcereal_inferencejob(
+def create_worldcereal_cop4geoglam_inferencejob(
     row: pd.Series,
     connection: openeo.Connection,
     provider,
@@ -108,8 +109,9 @@ def create_worldcereal_inferencejob(
     cropland_parameters=None,
     croptype_parameters=None,
     postprocess_parameters=None,
-    s1_orbit_state: Optional[str] = None,
+    s1_orbit_state: Optional[Literal["ASCENDING", "DESCENDING"]] = None,
     target_epsg: Optional[int] = None,
+    predict_with_presto: bool = False,
 ):
     temporal_extent = TemporalContext(start_date=row.start_date, end_date=row.end_date)
     spatial_extent = BoundingBoxExtent(*row.geometry.bounds, epsg=epsg)
@@ -123,6 +125,7 @@ def create_worldcereal_inferencejob(
         postprocess_parameters=postprocess_parameters,
         s1_orbit_state=s1_orbit_state,
         target_epsg=target_epsg,
+        predict_with_presto=predict_with_presto,
     )
 
     # Submit the job
@@ -141,7 +144,7 @@ def create_worldcereal_inferencejob(
     }
 
     return inference_result.create_job(
-        title=f"WorldCereal in-season inference for {row.tile_name}",
+        title=f"WorldCereal Cop4Geoglam inference for {row.tile_name}",
         job_options=job_options,
     )
 
@@ -195,6 +198,7 @@ if __name__ == "__main__":
     randomize_production_grid = (
         False  # If True, it will randomly select tiles from the production grid
     )
+    predict_with_presto = True  # If True, it will use presto for croptype prediction
     debug = False  # Triggers a selection of tiles
     start_date = "2024-09-01"
     end_date = "2025-08-31"
@@ -284,7 +288,7 @@ if __name__ == "__main__":
 
     # No postprocessing for the production run as we do this afterwards
     postprocess_parameters = PostprocessParameters(
-        enable=True,
+        enable=False,
         save_intermediate=True,  # saves not postprocessed
     )
     # Retry loop starts here
@@ -303,13 +307,14 @@ if __name__ == "__main__":
             manager.run_jobs(
                 df=job_df,
                 start_job=partial(
-                    create_worldcereal_inferencejob,
+                    create_worldcereal_cop4geoglam_inferencejob,
                     epsg=epsg,
                     product_type=product_type,
                     cropland_parameters=cropland_parameters,
                     croptype_parameters=croptype_parameters,
                     postprocess_parameters=postprocess_parameters,
                     target_epsg=epsg,
+                    predict_with_presto=predict_with_presto,
                 ),
                 job_db=job_tracking_csv,
             )
