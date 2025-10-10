@@ -16,6 +16,8 @@ import logging
 import tempfile
 from pathlib import Path
 
+import numpy as np
+
 # from typing import Optional
 import requests
 import xarray as xr
@@ -231,9 +233,9 @@ def apply_inference_regressor(inarr: xr.DataArray, parameters: dict, ) -> xr.Dat
     logger.info("Catboost regression with input shape: %s", inarr.shape)
     regression = model.predict(inarr.values)
     logger.info("Regression done with shape: %s", inarr.shape)
-
+    regression = regression.reshape(len(x_coords), len(y_coords), (len(output_labels)))
     regression_da = xr.DataArray(
-        regression.reshape((len(output_labels), len(x_coords), len(y_coords))),
+        np.moveaxis(regression, -1, 0),  # move bands to front
         dims=["bands", "x", "y"],
         coords={
             "bands": output_labels,
