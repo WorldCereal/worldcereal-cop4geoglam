@@ -49,5 +49,18 @@ PRODUCTION_MODELS_URLS: Dict[str, Dict[str, Dict[str, str]]] = {
             "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271322_DownstreamCatBoost_cropland_v100-MDA_balance%3DTrue.onnx",
             "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271333_DownstreamCatBoost_croptype_v100-MDA_balance%3DTrue.onnx",
         }
+    },
+    "mozambique":{
+        "presto":{
+            # "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202509261104_encoder.pt",
+            # "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-test-fuzzy-month-CROPTYPE_Mozambique_fuzzy-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510081032.pt",
+            "cropland":"/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/v0/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104/presto-prometheo-cop4geoglam-exp_points_no_agroforestry-month-LANDCOVER10-augment=False-balance=True-timeexplicit=False-freezing=True-run=202509261104_encoder.pt",
+            "croptype":"/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/test_fuzzy/presto-prometheo-cop4geoglam-test-fuzzy-month-CROPTYPE_Mozambique_fuzzy-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510081032.pt",
+        },
+        "catboost": {
+            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202509261104_DownstreamCatBoost_cropland_v0_balance%3DTrue.onnx",
+            "croptype":"",
+        }
+
     }
 }

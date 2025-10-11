@@ -1,4 +1,3 @@
-import copy
 import json
 import logging
 import sys
@@ -18,8 +17,6 @@ import xarray as xr
 # import numpy as np
 from catboost import CatBoostRegressor
 from einops import rearrange
-from openeo.udf import XarrayDataCube
-from openeo.udf.udf_data import UdfData
 from prometheo.datasets.worldcereal import (
     extract_features_from_model,
     generate_predictor,
@@ -27,9 +24,14 @@ from prometheo.datasets.worldcereal import (
 from prometheo.models.pooling import PoolingMethods
 from torch import nn
 from worldcereal.openeo.feature_extractor import (
-    EPSG_HARMONIZED_NAME,
-    rescale_s1_backscatter,
+    GFMAP_BAND_MAPPING,
+    PROMETHEO_WHL_URL,
+    compute_slope,
+    evaluate_resolution,
+    unpack_prometheo_wheel,
 )
+
+sys.path.append("feature_deps")
 
 logger = logging.getLogger(__name__)
 
@@ -206,13 +208,6 @@ def predict_with_presto(
     inarr: xr.DataArray, parameters: dict, epsg: int
 ) -> xr.DataArray:
     """Executes the feature extraction process on the input array."""
-    from worldcereal.openeo.feature_extractor import (
-        GFMAP_BAND_MAPPING,
-        PROMETHEO_WHL_URL,
-        compute_slope,
-        evaluate_resolution,
-        unpack_prometheo_wheel,
-    )
     if epsg is None:
         raise ValueError(
             "EPSG code is required for Presto feature extraction, but was "
@@ -332,32 +327,3 @@ def predict_with_presto(
     )  # openEO expects yx order after the UDF
 
     return predictions
-
-# Apply the Prediction UDF
-def apply_udf_data(udf_data: UdfData) -> UdfData:
-    """This is the actual openeo UDF that will be executed by the backend."""
-
-    cube = udf_data.datacube_list[0]
-    parameters = copy.deepcopy(udf_data.user_context)
-
-    proj = udf_data.proj
-    if proj is not None:
-        proj = proj["EPSG"]
-
-    parameters[EPSG_HARMONIZED_NAME] = proj
-
-    arr = cube.get_array().transpose("bands", "t", "y", "x")
-
-    epsg = parameters.pop(EPSG_HARMONIZED_NAME)
-    logger.info(f"EPSG code determined for feature extraction: {epsg}")
-
-    if parameters.get("rescale_s1", True):
-        arr = rescale_s1_backscatter(arr)
-
-    arr = predict_with_presto(inarr=arr, parameters=parameters, epsg=epsg)
-
-    cube = XarrayDataCube(arr)
-
-    udf_data.datacube_list = [cube]
-
-    return udf_data
