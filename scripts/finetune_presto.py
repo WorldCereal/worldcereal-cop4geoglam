@@ -215,7 +215,8 @@ def main(args):
         "cowpea",
         "sweet_potato",
         "pigeon_pea",
-        "sugarcane"
+        "sugarcane",
+        "other",
     ]
 
     # classes_list = [

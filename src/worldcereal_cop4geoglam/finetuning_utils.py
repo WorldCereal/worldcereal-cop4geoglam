@@ -126,8 +126,11 @@ def get_training_dfs_from_parquet(
         df.rename(columns={'membership':'finetune_class'}, inplace=True)
     else:
         df = map_classes(df, finetune_classes, class_mappings=class_mappings)
-    # Remove classes with too few samples for stratification
-    df = remove_small_classes(df, min_samples=10)
+
+    # Don't apply small classes filtering in case of fuzzy labelling
+    if len(df.finetune_class.iloc[0]) == 1:
+        # Remove classes with too few samples for stratification
+        df = remove_small_classes(df, min_samples=10)
     if test_samples_file is not None:
         logger.info(
             f"Controlled `train/val` vs `test` split based on: {test_samples_file}"
