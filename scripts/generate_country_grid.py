@@ -1,5 +1,6 @@
 import abc
 import math
+import os
 from typing import Dict, List, NamedTuple, Optional, Union
 
 import geopandas as gpd
@@ -145,16 +146,16 @@ def split_area(
     return tile_grid.get_tiles(aoi)
 
 
-country = 'moldova'
+country = 'mozambique'
 output_dir = f'/vitodata/worldcereal/data/COP4GEOGLAM/{country}/auxdata/'
-area_extension = 20000.0 # 20x20k
+area_extension = 50000.0 # 20x20k
 
-gaul_dict = {'moldova': 'Moldova, Republic of', 'mozambique': 'Mozambique'}
-epsg_dict = {'moldova': 32635, 'mozambique': ...}
+gaul_dict = {'moldova': 'Moldova, Republic of', 'mozambique': 'Zambezia'}
+epsg_dict = {'moldova': 32635, 'mozambique': 32737}
 
 # load country borders
-borders = gpd.read_file('/vitodata/worldcereal/auxdata/Gaul/GAUL0.shp')
-moldova_borders = borders[borders['ADM0_NAME']==gaul_dict[country]]
+borders = gpd.read_file('/vitodata/worldcereal/auxdata/Gaul/GAUL1.shp')
+moldova_borders = borders[borders['ADM1_NAME']==gaul_dict[country]]
 moldova_borders = moldova_borders.to_crs(f'EPSG:{epsg_dict[country]}')
 
 # generate block grid. the grid will consist of the smallest rectangle containing the entire country area
@@ -170,10 +171,12 @@ filtered_blocks = blocks_moldova_gdf.sjoin(moldova_borders, how='inner', predica
 filtered_blocks["geometry"] = filtered_blocks["geometry"].apply(
     lambda geom: geom if geom.geom_type == "Polygon" else list(geom.geoms)[0]
 )
-block_ids = [f"MDA_{i:03d}" for i in range(len(filtered_blocks))]
+block_ids = [f"MOZ_{i:03d}" for i in range(len(filtered_blocks))]
 filtered_blocks = filtered_blocks.reset_index(drop=True)
 
 # assign block IDs
 filtered_blocks["tile_name"] = block_ids
 
-filtered_blocks.to_file(f'{output_dir}/moldova_blocks_{area_extension/1000:.0f}k.geojson', driver='GeoJSON')
+os.makedirs(output_dir, exist_ok=True)
+
+filtered_blocks.to_file(f'{output_dir}/{country}_blocks_{area_extension/1000:.0f}k.geojson', driver='GeoJSON')
