@@ -53,12 +53,12 @@ def _croptype_map_from_presto(
         context=feature_parameters,
     )
 
-    classes = inputs.apply_neighborhood(
+    predictions = inputs.apply_neighborhood(
         process=inference_udf,
         size=[
             {"dimension": "x", "unit": "px", "value": 128},
             {"dimension": "y", "unit": "px", "value": 128},
-            {"dimension": "t", "value": "P1D"},
+            # {"dimension": "t", "value": "P1D"},
         ],
         overlap=[
             {"dimension": "x", "unit": "px", "value": 0},
@@ -67,7 +67,7 @@ def _croptype_map_from_presto(
     )
 
     # Get rid of temporal dimension
-    predictions = classes.reduce_dimension(dimension="t", reducer="mean")
+    # predictions = predictions.reduce_dimension(dimension="t", reducer="mean")
 
     # Mask cropland
     if cropland_mask is not None:

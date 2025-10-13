@@ -112,6 +112,7 @@ def create_worldcereal_cop4geoglam_inferencejob(
     s1_orbit_state: Optional[Literal["ASCENDING", "DESCENDING"]] = None,
     target_epsg: Optional[int] = None,
     predict_with_presto: bool = False,
+    classes_list: Optional[list] = None,
 ):
     temporal_extent = TemporalContext(start_date=row.start_date, end_date=row.end_date)
     spatial_extent = BoundingBoxExtent(*row.geometry.bounds, epsg=epsg)
@@ -126,6 +127,7 @@ def create_worldcereal_cop4geoglam_inferencejob(
         s1_orbit_state=s1_orbit_state,
         target_epsg=target_epsg,
         predict_with_presto=predict_with_presto,
+        classes_list=classes_list,
     )
 
     # Submit the job
@@ -188,22 +190,33 @@ def generate_output_path_inference(
 if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
-    country = "moldova"
+    country = "mozambique"
+    production_run = "test_production"
     output_folder = Path(
-        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/V1_11092025/raw"
+        f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{production_run}/raw"
     )
     product_type = WorldCerealProductType.CROPTYPE
-    epsg = 32635
+    epsg = 32737
     parallel_jobs = 15
     randomize_production_grid = (
         False  # If True, it will randomly select tiles from the production grid
     )
     predict_with_presto = True  # If True, it will use presto for croptype prediction
-    debug = False  # Triggers a selection of tiles
-    start_date = "2024-09-01"
-    end_date = "2025-08-31"
-    # production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MDA_PSU_with_psu_name.parquet"
-    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/auxdata/moldova_blocks_20k.parquet"
+    classes_list = [
+        "maize",
+        "soybean",
+        "sesame",
+        "sweet_potato",
+        "cassava",
+        "pigeon pea",
+        "rice",
+        "other"
+    ] if predict_with_presto else []
+    debug = True  # Triggers a selection of tiles
+    start_date = "2024-10-01"
+    end_date = "2025-09-30"
+    # production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MOZ_PSU_UTM.parquet"
+    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/auxdata/zambezia_blocks_20k.parquet"
     restart_failed = True  # If True, it will restart failed jobs
     # ------------------------
 
@@ -239,7 +252,7 @@ if __name__ == "__main__":
             logger.info("Running in debug mode, selecting a subset of tiles.")
             # Select a subset of tiles for debugging
             # This is just an example selection, adjust as needed
-            selection = ["E382N290", "E412N272", "E370N226", "E364N274", "E338N288"]
+            selection = ["MOZ_1569", "MOZ_1461", "MOZ_1286", "MOZ_1564", "MOZ_1835"]
             production_gdf = production_gdf[production_gdf["tile_name"].isin(selection)]
 
         if randomize_production_grid:
@@ -268,10 +281,11 @@ if __name__ == "__main__":
         presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"]["croptype"],  # NOQA
         compile_presto=False,
     )
-    classifier_parameters_croptype = ClassifierParameters(
-        # CatBoost model for croptype classification of the country
-        classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["croptype"]  # NOQA
-    )
+
+    # classifier_parameters_croptype = ClassifierParameters(
+    #     # CatBoost model for croptype classification of the country
+    #     classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["croptype"]  # NOQA
+    # )
 
     cropland_parameters = CropLandParameters(
         feature_parameters=feature_parameters_cropland,
@@ -280,7 +294,7 @@ if __name__ == "__main__":
 
     croptype_parameters = CropTypeParameters(
         feature_parameters=feature_parameters_croptype,
-        classifier_parameters=classifier_parameters_croptype,
+        # classifier_parameters=classifier_parameters_croptype,
         # Save resources, no cropland mask needed for the production run
         mask_cropland=True,
         save_mask=True,
@@ -288,8 +302,8 @@ if __name__ == "__main__":
 
     # No postprocessing for the production run as we do this afterwards
     postprocess_parameters = PostprocessParameters(
-        enable=False,
-        save_intermediate=True,  # saves not postprocessed
+        enable=False,  # True,
+        save_intermediate=False, #True,  # saves not postprocessed
     )
     # Retry loop starts here
     attempt = 0
@@ -315,6 +329,7 @@ if __name__ == "__main__":
                     postprocess_parameters=postprocess_parameters,
                     target_epsg=epsg,
                     predict_with_presto=predict_with_presto,
+                    classes_list=classes_list if predict_with_presto else None,
                 ),
                 job_db=job_tracking_csv,
             )
