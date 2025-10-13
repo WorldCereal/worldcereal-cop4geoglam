@@ -21,6 +21,7 @@ def _croptype_map_from_presto(
     croptype_parameters: "CropTypeParameters",
     postprocess_parameters: "PostprocessParameters",
     cropland_mask: DataCube = None,
+    classes_list: Optional[list] = None,
 ) -> DataCube:
     """Method to produce croptype map from preprocessed inputs, using
     a Presto feature extractor and a CatBoost classifier.
@@ -43,17 +44,21 @@ def _croptype_map_from_presto(
 
     # Run inference
     feature_parameters = croptype_parameters.feature_parameters.model_dump()
+    if classes_list is None:
+        raise ValueError("Please provide a `classes_list` parameter. Got None.")
+    feature_parameters["classes_list"] = classes_list
+    feature_parameters["num_outputs"] = len(classes_list)
     inference_udf = openeo.UDF.from_file(
-        path=Path(__file__).resolve().parent / "inference_utils.py",
+        path=Path(__file__).resolve().parent / "predict_with_presto_udf.py",
         context=feature_parameters,
     )
 
-    classes = inputs.apply_neighborhood(
+    predictions = inputs.apply_neighborhood(
         process=inference_udf,
         size=[
             {"dimension": "x", "unit": "px", "value": 128},
             {"dimension": "y", "unit": "px", "value": 128},
-            {"dimension": "t", "value": "P1D"},
+            # {"dimension": "t", "value": "P1D"},
         ],
         overlap=[
             {"dimension": "x", "unit": "px", "value": 0},
@@ -62,7 +67,7 @@ def _croptype_map_from_presto(
     )
 
     # Get rid of temporal dimension
-    predictions = classes.reduce_dimension(dimension="t", reducer="mean")
+    # predictions = predictions.reduce_dimension(dimension="t", reducer="mean")
 
     # Mask cropland
     if cropland_mask is not None:
@@ -102,6 +107,7 @@ def create_inference_process_graph(
     tile_size: Optional[int] = 128,
     target_epsg: Optional[int] = None,
     predict_with_presto: bool = False,
+    classes_list: Optional[list] = None,
 ) -> openeo.DataCube:
     """Wrapper function that creates the inference openEO process graph.
 
@@ -223,6 +229,7 @@ def create_inference_process_graph(
                 croptype_parameters=croptype_parameters,
                 postprocess_parameters=postprocess_parameters,
                 cropland_mask=cropland_mask if croptype_parameters.mask_cropland else None,
+                classes_list=classes_list
             )
         else:
             classes = _croptype_map(
