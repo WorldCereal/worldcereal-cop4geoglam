@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import rasterio
 import xarray as xr
 from matplotlib import pyplot as plt
 from sklearn.exceptions import UndefinedMetricWarning
@@ -228,54 +229,122 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
 
 def applyThreshold(nc_file,class_list,output_folder,thresholds):
 
-    #Load the NC file
-    ds = xr.open_dataset(nc_file)
+    if nc_file.split('.')[-1] == 'tif':
+        applyThreshold_tif(nc_file,class_list,output_folder,thresholds)
+    else:
+        #Load the NC file
+        ds = xr.open_dataset(nc_file)
+
+        single_class_list = [cls for cls in class_list if 'x' not in cls]
+        single_class_list = [cls for cls in single_class_list if cls in ds.data_vars]
+
+        if isinstance(thresholds, (int, float)):
+            thresholds = [thresholds] * len(single_class_list)
+
+        #Create an empty array to store the temp (type = string)
+        temp = np.full(ds[single_class_list[0]].shape, '', dtype=object)
+        for i, crop in enumerate(single_class_list):
+            #make sure that 65535 values are set to 0
+            ds[crop] = ds[crop].where(ds[crop] != 65535, 0)
+            crop_mask = ds[crop] > thresholds[i]
+            temp = np.where(crop_mask, np.where(temp == '', crop, temp + 'x' + crop), temp)
+
+        class_list.append("")
+        #check whether the class is in the acceptable list, if not set to "other"
+        temp = np.where(np.isin(temp, class_list), temp, "other")
+
+        # give each unique value an integer according to its index in class_list
+        int_map = {cls: idx for idx, cls in enumerate(class_list)}
+        int_array = np.vectorize(int_map.get)(temp)
+        #set all values that are "" to np.nan
+        int_array = np.where(temp == "", np.nan, int_array)
+
+        #define the output file name
+        output_file = os.path.join(output_folder, os.path.basename(nc_file).replace('.nc', f'_thr{thresholds[0]}_classified.nc'))
+        #save as tif if the input is a tif
+        if os.path.endswith(nc_file, '.tif'):
+            output_file = output_file.replace('.nc', '.tif')
+
+        # copy the ds to a new dataset to avoid modifying the original dataset
+        ds_out = ds.copy()
+        # Add the integer array as a new variable to the dataset
+        ds_out['classification'] = ds_out[class_list[0]].copy(data=int_array)
+        #save the ds_out
+        ds_out['classification'].attrs['long_name'] = 'Crop type classification'
+        ds_out['classification'].attrs['classes'] = ','.join(class_list)
+        ds_out['classification'].attrs['thresholds'] = ','.join([str(thr) for thr in thresholds])
+        ds_out['classification'].attrs['nodata'] = np.nan
+        #save as nc file
+        ds_out.to_netcdf(output_file)
+        ds_out.close()
+
+def applyThreshold_tif(tif_file,class_list,output_folder,thresholds):
+
+    #Load the tif file
+    with rasterio.open(tif_file) as src:
+        data = src.read()
+        profile = src.profile
 
     single_class_list = [cls for cls in class_list if 'x' not in cls]
-    single_class_list = [cls for cls in single_class_list if cls in ds.data_vars]
 
     if isinstance(thresholds, (int, float)):
         thresholds = [thresholds] * len(single_class_list)
 
     #Create an empty array to store the temp (type = string)
-    temp = np.full(ds[single_class_list[0]].shape, '', dtype=object)
+    temp = np.full(data[0].shape, '', dtype=object)
+    no_crop_mask = data[0] > 2
     for i, crop in enumerate(single_class_list):
         #make sure that 65535 values are set to 0
-        ds[crop] = ds[crop].where(ds[crop] != 65535, 0)
-        crop_mask = ds[crop] > thresholds[i]
+        data[i] = np.where(data[i] > 2, 0, data[i])
+        crop_mask = data[i] > thresholds[i]
         temp = np.where(crop_mask, np.where(temp == '', crop, temp + 'x' + crop), temp)
 
-    class_list.append("")
+    class_list_cop = class_list.copy()
+    class_list_cop.append("")
     #check whether the class is in the acceptable list, if not set to "other"
-    temp = np.where(np.isin(temp, class_list), temp, "other")
+    temp = np.where(np.isin(temp, class_list_cop), temp, "other")
 
     # give each unique value an integer according to its index in class_list
-    int_map = {cls: idx for idx, cls in enumerate(class_list)}
+    int_map = {cls: idx for idx, cls in enumerate(class_list_cop)}
     int_array = np.vectorize(int_map.get)(temp)
-    #set all values that are "" to np.nan
-    int_array = np.where(temp == "", np.nan, int_array)
+    # Set all values that are "" to -9999 (nodata value for int16)
+    int_array = np.where(temp == "", -9999, int_array)
+    int_array = int_array.astype(np.int16)
 
-    #define the output file name
-    output_file = os.path.join(output_folder, os.path.basename(nc_file).replace('.nc', f'_thr{thresholds[0]}_classified.nc'))
+    # Reshape to 1, height, width
+    int_array = int_array.reshape(1, int_array.shape[0], int_array.shape[1])
+    int_array = np.where(no_crop_mask, -9999, int_array)
 
-    # copy the ds to a new dataset to avoid modifying the original dataset
-    ds_out = ds.copy()
-    # Add the integer array as a new variable to the dataset
-    ds_out['classification'] = ds_out[class_list[0]].copy(data=int_array)
-    #save the ds_out
-    ds_out['classification'].attrs['long_name'] = 'Crop type classification'
-    ds_out['classification'].attrs['classes'] = ','.join(class_list)
-    ds_out['classification'].attrs['thresholds'] = ','.join([str(thr) for thr in thresholds])
-    ds_out['classification'].attrs['nodata'] = np.nan
-    #save as nc file
-    ds_out.to_netcdf(output_file)
-    ds_out.close()
+    # Define the output file name
+    output_file = os.path.join(output_folder, os.path.basename(tif_file).replace('.tif', f'_thr{thresholds[0]}_classified.tif'))
+
+    # Update the profile with the correct nodata value
+    profile.update(
+        dtype=np.int16,
+        count=1,
+        compress='lzw',
+        nodata=-9999  # Set nodata value to -9999
+    )
+
+    #link the values to the class names in the metadata
+
+    # Write the classified data to a new GeoTIFF file
+    with rasterio.open(output_file, 'w', **profile) as dst:
+        dst.write(int_array)
+        dst.update_tags(
+            1,
+            long_name='Crop type classification',
+            classes=','.join(class_list),
+            thresholds=','.join([str(thr) for thr in thresholds]),
+            nodata=-9999  # Ensure nodata value matches
+        )
+
 
 if __name__ == "__main__":
 
     main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/"
 
-    nc_folder = os.path.join(main_folder,"production","local_with_fuzzy_class_10samples/")
+    nc_folder = os.path.join(main_folder,"production","test_production","raw")
     folder = os.path.join(main_folder,"fuzzy_test")
     os.makedirs(folder, exist_ok=True)
 
@@ -317,9 +386,9 @@ if __name__ == "__main__":
     #Create confusion matrix for the best F1 threshold
     #createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold)
 
-    nc_files = glob.glob(os.path.join(nc_folder, '*croptype_masked.nc'))
+    tif_files = glob.glob(os.path.join(nc_folder,"*",'croptype*.tif'))
 
     F1_threshold = 0.24
 
-    for nc_file in tqdm(nc_files,desc="Processing nc files"):
-        applyThreshold(nc_file,class_list,output_folder=folder,thresholds=F1_threshold)
+    for tif_file in tqdm(tif_files,desc="Processing nc files"):
+        applyThreshold(tif_file,class_list,output_folder=folder,thresholds=F1_threshold)

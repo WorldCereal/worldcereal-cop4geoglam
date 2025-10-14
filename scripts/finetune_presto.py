@@ -19,8 +19,7 @@ from torch.optim import AdamW, lr_scheduler
 from torch.utils.data import DataLoader
 
 # from worldcereal_in_season.datasets import MaskingStrategy
-from worldcereal.train.data import get_training_dfs_from_parquet
-
+# from worldcereal.train.data import get_training_dfs_from_parquet
 from worldcereal_cop4geoglam.constants import (
     COUNTRY_PARQUET_FILES,
     PRESTO_PRETRAINED_MODEL_PATH,
@@ -28,6 +27,7 @@ from worldcereal_cop4geoglam.constants import (
 from worldcereal_cop4geoglam.finetuning_utils import (
     evaluate_finetuned_model,
     get_class_mappings,
+    get_training_dfs_from_parquet,
     prepare_training_datasets,
     run_finetuning,
 )
@@ -84,6 +84,9 @@ def main(args):
     # Use WorldCereal data or COP4GEOGLAM data
     use_worldcereal_data = args.use_worldcereal_data
 
+    # Use class membership instead of mapping
+    use_class_membership = args.use_class_membership
+
     # Experiment signature
     version = args.version
     freezing = True if args.freeze_layers != [] else False
@@ -135,6 +138,7 @@ def main(args):
         timestep_freq=timestep_freq,
         finetune_classes=finetune_classes,
         class_mappings=CLASS_MAPPINGS,
+        use_class_membership=use_class_membership,
         val_samples_file=val_samples_file,
         test_samples_file=test_samples_file,
         debug=debug,
@@ -192,14 +196,26 @@ def main(args):
     # ----------------------------------------------------
     # Get the list of classes
     # classes_list = list(sorted(set(CLASS_MAPPINGS[finetune_classes].values())))
+    # classes_list = [
+    #     "maize",
+    #     "soybean",
+    #     "sesame",
+    #     "sweet_potato",
+    #     "cassava",
+    #     "pigeon pea",
+    #     "rice",
+    #     "other",
+    # ]
     classes_list = [
         "maize",
+        "rice",
         "soybean",
         "sesame",
-        "sweet_potato",
         "cassava",
-        "pigeon pea",
-        "rice",
+        "cowpea",
+        "sweet_potato",
+        "pigeon_pea",
+        "sugarcane",
         "other",
     ]
 
@@ -520,6 +536,7 @@ def parse_args(arg_list=None):
     )
     parser.add_argument("--version", type=str, default="0")
     parser.add_argument("--use_worldcereal_data", action="store_true")
+    parser.add_argument("--use_class_membership", action="store_true")
 
     args = parser.parse_args(arg_list)
 
@@ -534,7 +551,7 @@ if __name__ == "__main__":
 
     manual_args = [
         "--experiment_tag",
-        "test-fuzzy-wc-data-trainval",
+        "test-fuzzy-class-memberships",
         "--timestep_freq",
         "month",
         "--country",
@@ -552,7 +569,8 @@ if __name__ == "__main__":
         # "--debug",
         "--version",
         version,
-        "--use_worldcereal_data",
+        # "--use_worldcereal_data",
+        "--use_class_membership",
     ]
     # manual_args = None
 
