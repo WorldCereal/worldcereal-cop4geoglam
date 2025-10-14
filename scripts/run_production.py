@@ -17,8 +17,6 @@ from openeo_gfmap import BoundingBoxExtent, TemporalContext
 from openeo_gfmap.backend import cdse_connection
 from worldcereal.job import WorldCerealProductType
 from worldcereal.parameters import (
-    ClassifierParameters,
-    CropLandParameters,
     CropTypeParameters,
     FeaturesParameters,
     PostprocessParameters,
@@ -191,7 +189,8 @@ if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
     country = "mozambique"
-    production_run = "test_production"
+    multiclass = "landcover" # "croptype" or "landcover"
+    production_run = "test_croptype_20k_blocks"
     output_folder = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{production_run}/raw"
     )
@@ -202,15 +201,26 @@ if __name__ == "__main__":
         False  # If True, it will randomly select tiles from the production grid
     )
     predict_with_presto = True  # If True, it will use presto for croptype prediction
+    # classes_list = [
+    #     "maize",
+    #     "soybean",
+    #     "sesame",
+    #     "sweet_potato",
+    #     "cassava",
+    #     "pigeon pea",
+    #     "rice",
+    #     "other"
+    # ] if predict_with_presto else []
     classes_list = [
-        "maize",
-        "soybean",
-        "sesame",
-        "sweet_potato",
-        "cassava",
-        "pigeon pea",
-        "rice",
-        "other"
+        "bare_sparsely_vegetated",
+        "built_up",
+        "grasslands",
+        "permanent_crops",
+        "shrublands",
+        "temporary_crops",
+        "trees",
+        "water",
+        "wetlands"
     ] if predict_with_presto else []
     debug = True  # Triggers a selection of tiles
     start_date = "2024-10-01"
@@ -252,7 +262,8 @@ if __name__ == "__main__":
             logger.info("Running in debug mode, selecting a subset of tiles.")
             # Select a subset of tiles for debugging
             # This is just an example selection, adjust as needed
-            selection = ["MOZ_1569", "MOZ_1461", "MOZ_1286", "MOZ_1564", "MOZ_1835"]
+            # selection = ["MOZ_034", "MOZ_025", "MOZ_029", "MOZ_026"]
+            selection = ["MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569", "MOZ_1485"]
             production_gdf = production_gdf[production_gdf["tile_name"].isin(selection)]
 
         if randomize_production_grid:
@@ -263,22 +274,22 @@ if __name__ == "__main__":
         job_df["start_date"] = start_date
         job_df["end_date"] = end_date
 
-    # Set dedicated feature and classifier parameters
-    feature_parameters_cropland = FeaturesParameters(
-        rescale_s1=False,
-        # presto model for cropland embeddings of the country
-        presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"]["cropland"],  # NOQA
-        compile_presto=False,
-    )
-    classifier_parameters_cropland = ClassifierParameters(
-        # CatBoost model for cropland classification of the country
-        classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["cropland"]  # NOQA
-    )
+    # # Set dedicated feature and classifier parameters
+    # feature_parameters_cropland = FeaturesParameters(
+    #     rescale_s1=False,
+    #     # presto model for cropland embeddings of the country
+    #     presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"]["cropland"],  # NOQA
+    #     compile_presto=False,
+    # )
+    # classifier_parameters_cropland = ClassifierParameters(
+    #     # CatBoost model for cropland classification of the country
+    #     classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["cropland"]  # NOQA
+    # )
 
     feature_parameters_croptype = FeaturesParameters(
         rescale_s1=False,
         # presto model for croptype embeddings of the country
-        presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"]["croptype"],  # NOQA
+        presto_model_url=PRODUCTION_MODELS_URLS[country]["presto"][multiclass],  # NOQA
         compile_presto=False,
     )
 
@@ -287,17 +298,17 @@ if __name__ == "__main__":
     #     classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["croptype"]  # NOQA
     # )
 
-    cropland_parameters = CropLandParameters(
-        feature_parameters=feature_parameters_cropland,
-        classifier_parameters=classifier_parameters_cropland,
-    )
+    # cropland_parameters = CropLandParameters(
+    #     feature_parameters=feature_parameters_cropland,
+    #     classifier_parameters=classifier_parameters_cropland,
+    # )
 
     croptype_parameters = CropTypeParameters(
         feature_parameters=feature_parameters_croptype,
         # classifier_parameters=classifier_parameters_croptype,
         # Save resources, no cropland mask needed for the production run
-        mask_cropland=True,
-        save_mask=True,
+        mask_cropland=False,
+        save_mask=False,
     )
 
     # No postprocessing for the production run as we do this afterwards
@@ -324,7 +335,7 @@ if __name__ == "__main__":
                     create_worldcereal_cop4geoglam_inferencejob,
                     epsg=epsg,
                     product_type=product_type,
-                    cropland_parameters=cropland_parameters,
+                    cropland_parameters= None, # cropland_parameters,
                     croptype_parameters=croptype_parameters,
                     postprocess_parameters=postprocess_parameters,
                     target_epsg=epsg,
