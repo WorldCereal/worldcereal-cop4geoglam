@@ -121,7 +121,7 @@ def get_training_dfs_from_parquet(
         _data_pivot.reset_index(inplace=True)
         df = _data_pivot if df is None else pd.concat([df, _data_pivot])
     if use_class_membership:
-        sample_memberships = sample_memberships.drop_duplicates(subset=['sample_id']).reset_index(drop=True)
+        # sample_memberships = sample_memberships.drop_duplicates(subset=['sample_id']).reset_index(drop=True)
         df = df.merge(sample_memberships, on='sample_id', how='left')
         df.rename(columns={'membership':'finetune_class'}, inplace=True)
     else:
