@@ -12,9 +12,16 @@ from prometheo.finetune import Hyperparams
 from prometheo.finetune import _setup as _prometheo_setup
 from prometheo.predictors import Predictors
 from prometheo.utils import DEFAULT_SEED, device, seed_everything
+from sklearn.model_selection import train_test_split
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+from worldcereal.train.data import (
+    map_classes,
+    process_parquet,
+    remove_small_classes,
+    split_df,
+)
 
 from worldcereal_cop4geoglam import data
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
@@ -42,6 +49,163 @@ def get_class_mappings(country: str = "kenya") -> Dict:
 
     return CLASS_MAPPINGS
 
+def get_training_dfs_from_parquet(
+    parquet_files: Union[Union[Path, str], List[Union[Path, str]]],
+    timestep_freq: Literal["month", "dekad"] = "month",
+    finetune_classes: str = "CROPLAND2",
+    use_class_membership: bool = False,
+    class_mappings: Dict[str, Dict[str, str]] = get_class_mappings(),
+    val_samples_file: Optional[Union[Path, str]] = None,
+    test_samples_file: Optional[Union[Path, str]] = None,
+    debug: bool = False,
+
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Prepare training, validation, and test DataFrames from parquet files for presto model fine-tuning.
+    This function reads parquet files containing time series data, processes them into a wide format,
+    maps the classes according to the specified fine-tuning target, and splits the data into train,
+    validation, and test sets.
+    Parameters
+    ----------
+    parquet_files : List[Union[Path, str]]
+        List of local paths to parquet files.
+    timestep_freq : str, default="month"
+        Frequency of timesteps. Can be "month" or "dekad".
+    finetune_classes (str):
+        The set of fine-tuning classes to use from CLASS_MAPPINGS.
+        This should be one of the keys in CLASS_MAPPINGS.
+        Most popular maps: "LANDCOVER14", "CROPTYPE9", "CROPTYPE0", "CROPLAND2".
+        Defaults to "CROPLAND2".
+    class_mappings (dict, optional):
+            Dictionary containing the mapping of original class codes to new class labels.
+    val_samples_file : Optional[Union[Path, str]], default=None
+        Path to a CSV file containing sample IDs for controlled validation set selection.
+        If provided, the test set will be constructed using these sample IDs.
+        If None, a random train/test split will be performed.
+    debug : bool, default=False
+        If True, a maximum of one file will be processed for quick testing.
+    Returns
+    -------
+    Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]
+        A tuple containing three DataFrames:
+        - train_df: DataFrame with training samples
+        - val_df: DataFrame with validation samples
+        - test_df: DataFrame with test samples
+    """
+    logger.info("Reading dataset")
+    if isinstance(parquet_files, (str, Path)):
+        # If a single file is provided, convert it to a list
+        parquet_files = [parquet_files]
+    if debug:
+        # select 1st file in debug mode
+        parquet_files = parquet_files[:1]
+        logger.warning("Debug mode is enabled.")
+    df = pd.DataFrame()
+    sample_memberships = pd.DataFrame(columns=['sample_id', 'membership'])
+    for f in parquet_files:
+        logger.info(f"Processing {f}")
+        _data = pd.read_parquet(f, engine="fastparquet")
+        _data = _data[_data["sample_id"].notnull()]
+        _data["ewoc_code"] = _data["ewoc_code"].astype(int)
+        for tcol in ["valid_time", "start_time", "end_time", "timestamp"]:
+            if tcol in _data.columns:
+                _data[tcol] = pd.to_datetime(_data[tcol], utc=True)
+                _data[tcol] = _data[tcol].dt.tz_localize(None)
+        if use_class_membership:
+            _data = _data[_data["membership"].notnull()]
+            sample_memberships_ = _data[['sample_id', 'membership']]
+            sample_memberships_ = sample_memberships_.drop_duplicates(subset=['sample_id'])
+            sample_memberships = pd.concat([sample_memberships, sample_memberships_])
+            _data = _data.drop(columns=["membership"])
+        _data_pivot = process_parquet(_data, freq=timestep_freq)
+        _data_pivot.reset_index(inplace=True)
+        df = _data_pivot if df is None else pd.concat([df, _data_pivot])
+    if use_class_membership:
+        # sample_memberships = sample_memberships.drop_duplicates(subset=['sample_id']).reset_index(drop=True)
+        df = df.merge(sample_memberships, on='sample_id', how='left')
+        df.rename(columns={'membership':'finetune_class'}, inplace=True)
+    else:
+        df = map_classes(df, finetune_classes, class_mappings=class_mappings)
+
+    # Don't apply small classes filtering in case of fuzzy labelling
+    if len(df.finetune_class.iloc[0]) == 1:
+        # Remove classes with too few samples for stratification
+        df = remove_small_classes(df, min_samples=10)
+    if test_samples_file is not None:
+        logger.info(
+            f"Controlled `train/val` vs `test` split based on: {test_samples_file}"
+        )
+        test_samples_df = pd.read_csv(test_samples_file)
+        trainval_df, test_df = split_df(
+            df, val_sample_ids=test_samples_df.sample_id.tolist()
+        )
+    else:
+        logger.info("Random `train/val` vs `test` split ...")
+        # train_df, test_df = split_df(df, val_size=0.2)
+        # TO DO: add possibility of per-class stratification to original split_df function
+        trainval_df, test_df = train_test_split(
+            df, test_size=0.2, random_state=42, stratify=df["finetune_class"]
+        )
+    # train_df, val_df = split_df(train_df, val_size=0.2)
+    # Remove classes with too few samples for stratification, now on trainval_df
+    trainval_df = remove_small_classes(trainval_df, min_samples=5)
+    if val_samples_file is not None:
+        logger.info(f"Controlled `train` vs `val` split based on: {val_samples_file}")
+        val_samples_df = pd.read_csv(val_samples_file)
+        train_df, val_df = split_df(
+            trainval_df, val_sample_ids=val_samples_df.sample_id.tolist()
+        )
+    else:
+        logger.info("Random `train` vs `val` split ...")
+        train_df, val_df = train_test_split(
+            trainval_df,
+            test_size=0.2,
+            random_state=42,
+            stratify=trainval_df["finetune_class"],
+        )
+    if test_samples_file:
+        # With controlled test set it's possible that either
+        # the test set has unique classes not present in training
+        # So we need to remove those classes in its totality
+        # Detect multi-label (list / tuple / ndarray one-hot) vs single-label (scalar)
+        sample_val = train_df["finetune_class"].iloc[0]
+        is_multilabel = isinstance(sample_val, (list, tuple, np.ndarray))
+        def extract_present_classes(df):
+            if df.empty:
+                return set()
+            if not is_multilabel:
+                return set(df["finetune_class"].unique())
+            present = set()
+            for row in df["finetune_class"]:
+                # row is expected a one-hot like sequence
+                for idx, v in enumerate(row):
+                    if v > 0:
+                        present.add(idx)
+            return present
+        train_classes = extract_present_classes(train_df)
+        val_classes = extract_present_classes(val_df)
+        test_classes = extract_present_classes(test_df)
+        nontrainval_classes = test_classes - (train_classes | val_classes)
+        if nontrainval_classes:
+            if is_multilabel:
+                # Keep only samples whose positive labels are all within train/val classes
+                keep_mask = []
+                for row in test_df["finetune_class"]:
+                    row_classes = {i for i, v in enumerate(row) if v > 0}
+                    # Drop if any class is unseen (intersection not empty)
+                    keep_mask.append(len(row_classes & nontrainval_classes) == 0)
+                before = len(test_df)
+                test_df = test_df[keep_mask]
+                removed = before - len(test_df)
+            else:
+                before = len(test_df)
+                test_df = test_df[~test_df["finetune_class"].isin(nontrainval_classes)]
+                removed = before - len(test_df)
+            logger.warning(
+                "Removed classes from test set because they do not occur in train/val: "
+                f"{sorted(nontrainval_classes)} (samples removed: {removed})"
+            )
+    return train_df, val_df, test_df
 
 def prepare_training_datasets(
     train_df: pd.DataFrame,
