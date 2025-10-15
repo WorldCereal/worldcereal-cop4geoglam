@@ -1,6 +1,4 @@
-import os
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 
@@ -30,6 +28,9 @@ def mapCropList(croplist, crop_dict):
 def calculateMembership(row,crop_dict,dominant_membership = 0.8):
 
     croptypes = row['croptype_list']
+
+    if len(croptypes) == 0:
+        return None
     #create empty membership array
     membership = np.zeros(len(crop_dict)+1, dtype=np.float32)
 
@@ -75,10 +76,23 @@ def calculateMembership(row,crop_dict,dominant_membership = 0.8):
 
     return membership
 
+def updateEWOC(row,landcover_dict):
+    landuse = row['landuse']
+    if landuse in landcover_dict.keys():
+        return landcover_dict[landuse]
+    else:
+        return row["ewoc_code"]
+
+def updateEWOCname(row,landcover_dict):
+    landuse = row['landuse']
+    if landuse in landcover_dict.keys():
+        return landuse
+    else:
+        return row["ewoc_name"]
+
 
 if __name__ == "__main__":
 
-    activation = "mozambique"
 
     crop_dict = {
         "maize": ["maize"],
@@ -92,49 +106,49 @@ if __name__ == "__main__":
         "sugarcane": ["sugarcane"]
     }
 
-    base_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/"
-    activation_folder = os.path.join(base_folder, activation)
+    landcover_dict = {
+        "natural_shrubs": 3000000000,
+        "forest": 4000000000,
+        "natural_grassland": 2000000000,
+        "rocks": 5000000000,
+        "baresoil_sand": 5000000000,
+        "waterway_ponds": 7000000000,
+        "build_up": 6000000000,
+        "swamp_reeds": 2002000000
+    }
 
-    file = os.path.join(activation_folder, "trainingdata","worldcereal_merged_extractions.parquet")
 
+    data_file = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/refdata/harmonized/2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS.parquet"
 
-    #Note that the location of this geopackage still needs to be adapted to also exist on the worldcereal mount.
-    original_gpkg = os.path.join(activation_folder,"refdata","original","moz_results_2025.gpkg")
+    #open data file
+    df = pd.read_parquet(data_file)
 
-    originals = gpd.read_file(original_gpkg)
-    #drop rows with no crop type
-    #originals = originals[~originals['croptype'].isna()]
+    df['croptype_list'] = df.apply(lambda row: identifyCrops(row, crop_dict), axis=1)
+    df['membership'] = df.apply(lambda row: calculateMembership(row, crop_dict), axis=1)
 
-    #remove fallows
-    originals = originals[originals['croptype']!="fallow_yes"]
+    unique_landcover = df['landuse'].unique()
 
-    #remove agroforestry
-    originals = originals[originals["trees_in_cropfield"] != "trees_yes"]
+    df["ewoc_updated"] = df.apply(lambda row: updateEWOC(row, landcover_dict), axis=1)
+    df["ewoc_name_updated"] = df.apply(lambda row: updateEWOCname(row, landcover_dict), axis=1)
 
-    originals['croptype_list'] = originals.apply(lambda row: identifyCrops(row, crop_dict), axis=1)
-    originals['membership'] = originals.apply(lambda row: calculateMembership(row, crop_dict), axis=1)
+    df["ewoc_code"] = df["ewoc_updated"]
+    df["ewoc_name"] = df["ewoc_name_updated"]
 
-    #open extractions file
-    extractions = os.path.join(activation_folder, "trainingdata","worldcereal_merged_extractions.parquet",
-                               "ref_id=2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS",
-                               "2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS_0.parquet")
-    extractions_file = pd.read_parquet(extractions)
-    extractions_file["id_ssu"] = [sample_id.split("_")[5] + "_" + sample_id.split("_")[6] for sample_id in extractions_file["sample_id"]]
+    df = df.drop(columns=["ewoc_updated","ewoc_name_updated"])
 
-    #merge membership info into extractions
-    extractions_file = extractions_file.merge(originals[['id_ssu','landuse','croptype','membership']], on='id_ssu', how='left')
+    for crop in df["croptype"].unique():
+        if crop is not None:
+            unique_memberships = df[df["croptype"]==crop]["membership"].reset_index(drop=True)
+            sum_membership = np.sum(unique_memberships)/len(unique_memberships)
+            print(f"Crop: {crop}, unique memberships: {sum_membership}")
 
-    originals['membership'] = originals.apply(lambda row: np.round(row["membership"],2), axis=1)
+    total_sum_membership = np.sum(df["membership"].dropna().reset_index(drop=True))/len(df["membership"].dropna().reset_index(drop=True))
 
-    #save to file
-    extractions_file.to_parquet(os.path.join(activation_folder, "trainingdata","worldcereal_merged_extractions_with_membership.parquet"), index=False)
+    share_ewoc_big = [str(ewoc)[0] for ewoc in df["ewoc_code"] if not pd.isna(ewoc)]
+    df["ewoc_big"] = share_ewoc_big
+    share_ewoc = df.groupby("ewoc_big").size() / len(df)
 
-    extractions_file = extractions_file.dropna(subset=['membership'])
+    #save updated file
+    df.to_parquet(data_file.replace(".parquet","_with_membership_updatedEWOC.parquet"), index=False)
 
-    summed_membership = np.sum(np.stack(originals['membership'].values), axis=0)
-
-    #add names to summed membership
-    crop_names = list(crop_dict.keys()) + ["other"]
-    summed_membership_dict = dict(zip(crop_names, summed_membership))
-    print("Summed membership across all samples:")
-    print(summed_membership_dict)
+    print('t')
