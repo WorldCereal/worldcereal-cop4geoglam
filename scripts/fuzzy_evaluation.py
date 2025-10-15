@@ -340,11 +340,15 @@ def applyThreshold_tif(tif_file,class_list,output_folder,thresholds):
         )
 
 
+
+
+
+
 if __name__ == "__main__":
 
     main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/"
 
-    nc_folder = os.path.join(main_folder,"production","test_production","raw")
+    nc_folder = os.path.join(main_folder,"production","v3_landcover","raw")
     folder = os.path.join(main_folder,"fuzzy_test")
     os.makedirs(folder, exist_ok=True)
 
@@ -390,5 +394,5 @@ if __name__ == "__main__":
 
     F1_threshold = 0.24
 
-    for tif_file in tqdm(tif_files,desc="Processing nc files"):
-        applyThreshold(tif_file,class_list,output_folder=folder,thresholds=F1_threshold)
+    #for tif_file in tqdm(tif_files,desc="Processing nc files"):
+        #applyThreshold(tif_file,class_list,output_folder=folder,thresholds=F1_threshold)

@@ -8,29 +8,18 @@ from rio_cogeo import cog_profiles, cog_translate
 from shapely.geometry import box
 from tqdm import tqdm
 
-if __name__ == "__main__":
 
-    activation = "mozambique"
-    production_name = "v3_landcover"
+def createRoadsMask(raster_file,roads_file,roads_folder,data=None):
 
-    main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/"
-
-    #Loading the roads shapefile
-    act_folder = os.path.join(main_folder, activation)
-    aux_folder = os.path.join(act_folder,"auxdata")
-    shapefile = os.path.join(aux_folder,"gis_osm_roads_free_1.shp")
-    roads = gpd.read_file(shapefile)
-    roads_folder = os.path.join(aux_folder,"osm_roads_rasterized")
-    os.makedirs(roads_folder, exist_ok=True)
-
-    #Rasters
-    raster_folder = os.path.join(act_folder,"production",production_name,"raw","cropland")
-    raster_files = glob.glob(os.path.join(raster_folder,"*.tif"))
-
-    for raster_file in tqdm(raster_files, desc="Processing rasters"):
         raster_filename = os.path.basename(raster_file)
         roads_raster_file = os.path.join(roads_folder, raster_filename)
         if not os.path.exists(roads_raster_file):
+
+            if data is not None:
+                roads = data
+            else:
+                roads = gpd.read_file(roads_file)
+
             with rasterio.open(raster_file) as src:
                 raster_crs = src.crs
                 bounds = src.bounds
@@ -77,7 +66,6 @@ if __name__ == "__main__":
 
             #Convert to COG
             cog_profile = cog_profiles.get("deflate")
-            cog_path = roads_raster_file.replace(".tif", "_cog.tif")
             cog_translate(
                 roads_raster_file,
                 roads_raster_file,
@@ -85,3 +73,30 @@ if __name__ == "__main__":
                 in_memory=True,
                 quiet=True
             )
+
+if __name__ == "__main__":
+
+    activation = "mozambique"
+    production_name = "v3_landcover"
+
+    main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/"
+
+    #Loading the roads shapefile
+    act_folder = os.path.join(main_folder, activation)
+    aux_folder = os.path.join(act_folder,"auxdata")
+    shapefile_roads = os.path.join(aux_folder,"gis_osm_roads_free_1.shp")
+    shapefile_buildings = os.path.join(aux_folder,"gis_osm_buildings_a_free_1.shp")
+    roads_folder = os.path.join(aux_folder,"osm_roads_rasterized")
+    buildings_folder = os.path.join(aux_folder,"osm_buildings_rasterized")
+    os.makedirs(roads_folder, exist_ok=True)
+    os.makedirs(buildings_folder, exist_ok=True)
+
+    #Rasters
+    raster_folder = os.path.join(act_folder,"production",production_name,"raw","cropland")
+    raster_files = glob.glob(os.path.join(raster_folder,"*.tif"))
+
+    buildings = gpd.read_file(shapefile_buildings)
+
+    for raster_file in tqdm(raster_files):
+        createRoadsMask(raster_file,shapefile_roads,roads_folder)
+        createRoadsMask(raster_file,shapefile_buildings,buildings_folder,data=buildings)
