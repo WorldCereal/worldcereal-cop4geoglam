@@ -189,8 +189,8 @@ if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
     country = "mozambique"
-    multiclass = "landcover" # "croptype" or "landcover"
-    production_run = "test_croptype_20k_blocks"
+    multiclass = "croptype" # "croptype" or "landcover"
+    production_run = "test_croptype_20k_blocks_memberships"
     output_folder = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{production_run}/raw"
     )
@@ -201,27 +201,34 @@ if __name__ == "__main__":
         False  # If True, it will randomly select tiles from the production grid
     )
     predict_with_presto = True  # If True, it will use presto for croptype prediction
-    # classes_list = [
-    #     "maize",
-    #     "soybean",
-    #     "sesame",
-    #     "sweet_potato",
-    #     "cassava",
-    #     "pigeon pea",
-    #     "rice",
-    #     "other"
-    # ] if predict_with_presto else []
-    classes_list = [
-        "bare_sparsely_vegetated",
-        "built_up",
-        "grasslands",
-        "permanent_crops",
-        "shrublands",
-        "temporary_crops",
-        "trees",
-        "water",
-        "wetlands"
-    ] if predict_with_presto else []
+    if multiclass == "croptype":
+        classes_list = [
+            "maize",
+            "rice",
+            "soybean",
+            "sesame",
+            "cassava",
+            "cowpea",
+            "sweet_potato",
+            "pigeon_pea",
+            "sugarcane",
+            "other"
+        ] if predict_with_presto else []
+    elif multiclass == "landcover":
+        classes_list = [
+            "bare_sparsely_vegetated",
+            "built_up",
+            "grasslands",
+            "permanent_crops",
+            "shrublands",
+            "temporary_crops",
+            "trees",
+            "water",
+            "wetlands"
+        ] if predict_with_presto else []
+    else:
+        classes_list = []
+
     debug = True  # Triggers a selection of tiles
     start_date = "2024-10-01"
     end_date = "2025-09-30"
@@ -263,7 +270,7 @@ if __name__ == "__main__":
             # Select a subset of tiles for debugging
             # This is just an example selection, adjust as needed
             # selection = ["MOZ_034", "MOZ_025", "MOZ_029", "MOZ_026"]
-            selection = ["MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569", "MOZ_1485"]
+            selection = ["MOZ_1420", "MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569"]
             production_gdf = production_gdf[production_gdf["tile_name"].isin(selection)]
 
         if randomize_production_grid:
