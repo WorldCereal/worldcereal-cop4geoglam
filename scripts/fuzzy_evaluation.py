@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
-def getClass(test_df, class_list, source="target", threshold=None):
+def getClass(test_df, class_list, source="target", threshold=None, assignOther=True,otherValue = "other"):
     """
     Determines the class for each row in the DataFrame based on thresholds.
 
@@ -64,16 +64,17 @@ def getClass(test_df, class_list, source="target", threshold=None):
         # Create a string with the classes separated by 'x'
         target_class = "x".join(classes)
 
-        if "x" in target_class:
-            # Check if the class is in the acceptable list
-            if target_class not in class_list:
-                target_class = "other"
+        if assignOther:
+            if "x" in target_class:
+                # Check if the class is in the acceptable list
+                if target_class not in class_list:
+                    target_class = otherValue
 
         target_classes.append(target_class)
 
     return target_classes
 
-def getOA_threshold(predictions, class_list, threshold=0.5):
+def getOA_threshold(predictions, class_list, threshold=0):
     targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
     predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
@@ -111,8 +112,12 @@ def getF1_threshold(predictions,class_list,threshold=0.5):
 
 def determineOptimalThreshold(predictions, class_list, indicator = "average_F1", makePlot=False, output_folder=None):
 
-    targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
-    predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
+    if 'type' in predictions.columns:
+        targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
+        predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
+    else:
+        targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
+        predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
     test = predictions.merge(targets, on="sample_id", suffixes=('_pred', '_true'))
 
@@ -126,7 +131,7 @@ def determineOptimalThreshold(predictions, class_list, indicator = "average_F1",
         raise ValueError("indicator must be 'OA' or 'average_F1'")
 
     for threshold in tqdm(thresholds,desc="Determining optimal threshold"):
-        test["target_class"] = getClass(test,class_list,source="target",threshold=threshold)
+        test["target_class"] = getClass(test,class_list,source="target",threshold=0)
         test["predicted_class"] = getClass(test,class_list,source="prediction",threshold=threshold)
         report = classification_report(test["target_class"], test["predicted_class"], output_dict=True)
         if indicator == "OA":
@@ -206,14 +211,18 @@ def determineOptimalThreshold(predictions, class_list, indicator = "average_F1",
     else:
         raise ValueError("indicator must be 'OA' or 'average_F1'")
 
-def createConfusionMatrix_threshold(predictions, output_folder, class_list, threshold=0.5):
+def createConfusionMatrix_threshold(predictions, output_folder, class_list, threshold=0.5,run_name=None):
 
-    targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
-    predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
+    if 'type' in predictions.columns:
+        targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
+        predictions = predictions.loc[predictions["type"]== "prediction",].reset_index(drop=True)
+    else:
+        targets = predictions.loc[predictions["source"]== "target",].reset_index(drop=True)
+        predictions = predictions.loc[predictions["source"]== "prediction",].reset_index(drop=True)
 
     test = predictions.merge(targets, on="sample_id", suffixes=('_pred', '_true'))
 
-    test["target_class"] = getClass(test,class_list,source="target",threshold=threshold)
+    test["target_class"] = getClass(test,class_list,source="target",threshold=0)
     test["predicted_class"] = getClass(test,class_list,source="prediction",threshold=threshold)
 
     F1 = getF1_threshold(predictions,class_list,threshold=threshold)
@@ -225,12 +234,12 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
     plt.title(f'Confusion Matrix: F1: {F1:.2f}')
     plt.show()
     # Save confusion matrix
-    disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}.png'), bbox_inches='tight')
+    disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}_run_{run_name}.png'), bbox_inches='tight')
 
-def applyThreshold(nc_file,class_list,output_folder,thresholds):
+def applyThreshold(nc_file,class_list,output_folder,thresholds,otherValue = "other"):
 
     if nc_file.split('.')[-1] == 'tif':
-        applyThreshold_tif(nc_file,class_list,output_folder,thresholds)
+        applyThreshold_tif(nc_file,class_list,output_folder,thresholds,otherValue=otherValue)
     else:
         #Load the NC file
         ds = xr.open_dataset(nc_file)
@@ -278,7 +287,7 @@ def applyThreshold(nc_file,class_list,output_folder,thresholds):
         ds_out.to_netcdf(output_file)
         ds_out.close()
 
-def applyThreshold_tif(tif_file,class_list,output_folder,thresholds):
+def applyThreshold_tif(tif_file,class_list,output_folder,thresholds,otherValue = "other"):
 
     #Load the tif file
     with rasterio.open(tif_file) as src:
@@ -300,9 +309,11 @@ def applyThreshold_tif(tif_file,class_list,output_folder,thresholds):
         temp = np.where(crop_mask, np.where(temp == '', crop, temp + 'x' + crop), temp)
 
     class_list_cop = class_list.copy()
+    if otherValue not in class_list_cop:
+        class_list_cop.append(otherValue)
     class_list_cop.append("")
     #check whether the class is in the acceptable list, if not set to "other"
-    temp = np.where(np.isin(temp, class_list_cop), temp, "other")
+    temp = np.where(np.isin(temp, class_list_cop), temp, otherValue)
 
     # give each unique value an integer according to its index in class_list
     int_map = {cls: idx for idx, cls in enumerate(class_list_cop)}
@@ -340,44 +351,44 @@ def applyThreshold_tif(tif_file,class_list,output_folder,thresholds):
         )
 
 
-
-
-
-
 if __name__ == "__main__":
 
     main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/"
 
-    nc_folder = os.path.join(main_folder,"production","v3_landcover","raw")
+    nc_folder = os.path.join(main_folder,"production","test_croptype_20k_blocks_memberships","raw")
     folder = os.path.join(main_folder,"fuzzy_test")
     os.makedirs(folder, exist_ok=True)
 
-    #pred_file = glob.glob(os.path.join(nc_folder, '*test_predictions.parquet'))[0]
+    #pred_file = glob.glob(os.path.join(folder, 'predictions_presto_run=202510151422.parquet'))[0]
 
     #predictions = pd.read_parquet(pred_file)
 
     class_list = [
             "maize",
+            "rice",
             "soybean",
             "sesame",
-            "sweet_potato",
             "cassava",
-            "pigeon pea",
-            "rice",
+            "cowpea",
+            "sweet_potato",
+            "pigeon_pea",
+            "sugarcane",
             "other",
             "maizexcassava",
-            "cassavaxpigeon pea",
-            "maizexcassavaxpigeon pea",
+            "cassavaxpigeon_pea",
+            "maizexcassavaxpigeon_pea"
         ]
 
     class_list_single = [
             "maize",
+            "rice",
             "soybean",
             "sesame",
-            "sweet_potato",
             "cassava",
-            "pigeon pea",
-            "rice",
+            "cowpea",
+            "sweet_potato",
+            "pigeon_pea",
+            "sugarcane",
             "other",
         ]
 
@@ -388,11 +399,11 @@ if __name__ == "__main__":
     #F1_threshold, F1 = determineOptimalThreshold(predictions,class_list,"average_F1",makePlot=True,output_folder=folder)
 
     #Create confusion matrix for the best F1 threshold
-    #createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold)
+    #createConfusionMatrix_threshold(predictions,folder, class_list, threshold=OA_threshold, run_name = "v3")
 
     tif_files = glob.glob(os.path.join(nc_folder,"*",'croptype*.tif'))
 
-    F1_threshold = 0.24
+    F1_threshold = [0.22,0.1,0.1,0.2,0.1,0.2,0.2,0.2,0.3,0.5]
 
-    #for tif_file in tqdm(tif_files,desc="Processing nc files"):
-        #applyThreshold(tif_file,class_list,output_folder=folder,thresholds=F1_threshold)
+    for tif_file in tqdm(tif_files,desc="Processing nc files"):
+        applyThreshold(tif_file,class_list,output_folder=folder,thresholds=F1_threshold,otherValue = "other_mix")
