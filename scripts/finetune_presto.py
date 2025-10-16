@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Literal
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from loguru import logger
@@ -32,6 +33,15 @@ from worldcereal_cop4geoglam.finetuning_utils import (
     run_finetuning,
 )
 
+
+def reassign_memberships(membership_list, ignore_classes, classes_list):
+    ignore_classes_indices = [
+        classes_list.index(cls) for cls in ignore_classes if cls in classes_list
+        ]
+    other_class_index = classes_list.index("other")
+    membership_list[other_class_index] += np.array(membership_list)[ignore_classes_indices].sum()
+    membership_list = [membership_list[i] for i in range(len(membership_list)) if i not in ignore_classes_indices]
+    return membership_list
 
 def get_parquet_file_list(
     timestep_freq: Literal["month", "dekad"] = "dekad", country: str = "moldova"
@@ -142,26 +152,76 @@ def main(args):
         val_samples_file=val_samples_file,
         test_samples_file=test_samples_file,
         debug=debug,
+        country=country,
     )
+    # ----------------------------------------------------
+    # Temporary hardcoding of classes_list for CROPTYPE_Mozambique_fuzzy
+    # ----------------------------------------------------
+    # Get the list of classes
+    # classes_list = list(sorted(set(CLASS_MAPPINGS[finetune_classes].values())))
+    # classes_list = [
+    #     "maize",
+    #     "soybean",
+    #     "sesame",
+    #     "sweet_potato",
+    #     "cassava",
+    #     "pigeon pea",
+    #     "rice",
+    #     "other",
+    # ]
+    classes_list = [
+        "maize",
+        "rice",
+        "soybean",
+        "sesame",
+        "cassava",
+        "cowpea",
+        "sweet_potato",
+        "pigeon_pea",
+        "sugarcane",
+        "other",
+    ]
+    ignore_classes = [] #["cowpea", "sugarcane"]
+    if ignore_classes != []:
+        logger.info(f"Ignoring classes: {ignore_classes} from datasets")
+        train_df['finetune_class'] = train_df['finetune_class'].apply(
+            lambda x: reassign_memberships(x, ignore_classes, classes_list)
+        )
+        val_df['finetune_class'] = val_df['finetune_class'].apply(
+            lambda x: reassign_memberships(x, ignore_classes, classes_list)
+        )
+        test_df['finetune_class'] = test_df['finetune_class'].apply(
+            lambda x: reassign_memberships(x, ignore_classes, classes_list)
+        )
+        classes_list = [c for c in classes_list if c not in ignore_classes]
+
+    # classes_list = [
+    #     xx for xx in classes_list if xx in train_df["finetune_class"].unique()
+    # ]
+    logger.info(f"classes_list: {classes_list}")
+    # num_classes = train_df["finetune_class"].nunique()
+    num_classes = len(classes_list)
 
     # We have to make sure we don't have AL or SR samples in the test set
-    logger.info(f"Test samples before filtering AL/SR: {len(test_df)}")
-    test_df = test_df[
+    logger.info(f"Validation samples before filtering AL/SR/EXP: {len(test_df)}")
+    val_df = val_df[
         ~(
-            test_df.sample_id.str.contains("_SR_")
-            | test_df.sample_id.str.contains("_AL_")
+            val_df.sample_id.str.contains("_SR_")
+            | val_df.sample_id.str.contains("_AL_")
+            | val_df.sample_id.str.contains("_EXP_")
         )
     ]
-    logger.info(f"Test samples after filtering AL/SR: {len(test_df)}")
+    logger.info(f"Validation samples after filtering AL/SR/EXP: {len(test_df)}")
 
-    logger.info(f"Test samples before filtering AL/SR: {len(test_df)}")
+    logger.info(f"Test samples before filtering AL/SR/EXP: {len(test_df)}")
     test_df = test_df[
         ~(
             test_df.sample_id.str.contains("_SR_")
             | test_df.sample_id.str.contains("_AL_")
+            | test_df.sample_id.str.contains("_EXP_")
         )
     ]
-    logger.info(f"Test samples after filtering AL/SR: {len(test_df)}")
+    logger.info(f"Test samples after filtering AL/SR/EXP: {len(test_df)}")
 
     # Use WorldCereal data or COP4GEOGLAM data
     if use_worldcereal_data:
@@ -191,40 +251,6 @@ def main(args):
     val_df.to_parquet(Path(output_dir) / "val_df.parquet")
     test_df.to_parquet(Path(output_dir) / "test_df.parquet")
 
-    # ----------------------------------------------------
-    # Temporary hardcoding of classes_list for CROPTYPE_Mozambique_fuzzy
-    # ----------------------------------------------------
-    # Get the list of classes
-    # classes_list = list(sorted(set(CLASS_MAPPINGS[finetune_classes].values())))
-    # classes_list = [
-    #     "maize",
-    #     "soybean",
-    #     "sesame",
-    #     "sweet_potato",
-    #     "cassava",
-    #     "pigeon pea",
-    #     "rice",
-    #     "other",
-    # ]
-    classes_list = [
-        "maize",
-        "rice",
-        "soybean",
-        "sesame",
-        "cassava",
-        "cowpea",
-        "sweet_potato",
-        "pigeon_pea",
-        "sugarcane",
-        "other",
-    ]
-
-    # classes_list = [
-    #     xx for xx in classes_list if xx in train_df["finetune_class"].unique()
-    # ]
-    logger.info(f"classes_list: {classes_list}")
-    # num_classes = train_df["finetune_class"].nunique()
-    num_classes = len(classes_list)
 
     # ----------------------------------------------------
 
@@ -547,11 +573,11 @@ if __name__ == "__main__":
     country = "mozambique"
     finetune_classes = "CROPTYPE_Mozambique_fuzzy"
     task = finetune_classes.split("_")[0].lower()
-    version = "1"
+    version = "_membership"
 
     manual_args = [
         "--experiment_tag",
-        "test-fuzzy-class-memberships",
+        "test-fuzzy-memberships",
         "--timestep_freq",
         "month",
         "--country",

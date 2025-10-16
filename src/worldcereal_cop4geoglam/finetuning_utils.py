@@ -24,6 +24,7 @@ from worldcereal.train.data import (
 )
 
 from worldcereal_cop4geoglam import data
+from worldcereal_cop4geoglam.constants import COUNTRY_SOURCE_FILES
 from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
 
 
@@ -58,6 +59,7 @@ def get_training_dfs_from_parquet(
     val_samples_file: Optional[Union[Path, str]] = None,
     test_samples_file: Optional[Union[Path, str]] = None,
     debug: bool = False,
+    country: str = "mozambique"
 
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
@@ -101,7 +103,7 @@ def get_training_dfs_from_parquet(
         parquet_files = parquet_files[:1]
         logger.warning("Debug mode is enabled.")
     df = pd.DataFrame()
-    sample_memberships = pd.DataFrame(columns=['sample_id', 'membership'])
+
     for f in parquet_files:
         logger.info(f"Processing {f}")
         _data = pd.read_parquet(f, engine="fastparquet")
@@ -111,18 +113,19 @@ def get_training_dfs_from_parquet(
             if tcol in _data.columns:
                 _data[tcol] = pd.to_datetime(_data[tcol], utc=True)
                 _data[tcol] = _data[tcol].dt.tz_localize(None)
-        if use_class_membership:
-            _data = _data[_data["membership"].notnull()]
-            sample_memberships_ = _data[['sample_id', 'membership']]
-            sample_memberships_ = sample_memberships_.drop_duplicates(subset=['sample_id'])
-            sample_memberships = pd.concat([sample_memberships, sample_memberships_])
-            _data = _data.drop(columns=["membership"])
         _data_pivot = process_parquet(_data, freq=timestep_freq)
         _data_pivot.reset_index(inplace=True)
         df = _data_pivot if df is None else pd.concat([df, _data_pivot])
     if use_class_membership:
-        sample_memberships = sample_memberships.drop_duplicates(subset=['sample_id']).reset_index(drop=True)
+        # sample_memberships = sample_memberships.drop_duplicates(subset=['sample_id']).reset_index(drop=True)
+        if country not in COUNTRY_SOURCE_FILES:
+            raise ValueError(f"Country `{country}` not recognized for class membership usage.")
+        if COUNTRY_SOURCE_FILES[country] is None:
+            raise ValueError(f"Country `{country}` does not have a valid source file for class membership usage.")
+        sample_memberships = pd.read_parquet(COUNTRY_SOURCE_FILES[country])[['sample_id','membership']]
         df = df.merge(sample_memberships, on='sample_id', how='left')
+        df = df[df["membership"].notnull()]
+        df['membership'] = df["membership"].apply(lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
         df.rename(columns={'membership':'finetune_class'}, inplace=True)
     else:
         df = map_classes(df, finetune_classes, class_mappings=class_mappings)
@@ -148,7 +151,7 @@ def get_training_dfs_from_parquet(
         )
     # train_df, val_df = split_df(train_df, val_size=0.2)
     # Remove classes with too few samples for stratification, now on trainval_df
-    trainval_df = remove_small_classes(trainval_df, min_samples=5)
+    # trainval_df = remove_small_classes(trainval_df, min_samples=5)
     if val_samples_file is not None:
         logger.info(f"Controlled `train` vs `val` split based on: {val_samples_file}")
         val_samples_df = pd.read_csv(val_samples_file)
@@ -163,48 +166,48 @@ def get_training_dfs_from_parquet(
             random_state=42,
             stratify=trainval_df["finetune_class"],
         )
-    if test_samples_file:
-        # With controlled test set it's possible that either
-        # the test set has unique classes not present in training
-        # So we need to remove those classes in its totality
-        # Detect multi-label (list / tuple / ndarray one-hot) vs single-label (scalar)
-        sample_val = train_df["finetune_class"].iloc[0]
-        is_multilabel = isinstance(sample_val, (list, tuple, np.ndarray))
-        def extract_present_classes(df):
-            if df.empty:
-                return set()
-            if not is_multilabel:
-                return set(df["finetune_class"].unique())
-            present = set()
-            for row in df["finetune_class"]:
-                # row is expected a one-hot like sequence
-                for idx, v in enumerate(row):
-                    if v > 0:
-                        present.add(idx)
-            return present
-        train_classes = extract_present_classes(train_df)
-        val_classes = extract_present_classes(val_df)
-        test_classes = extract_present_classes(test_df)
-        nontrainval_classes = test_classes - (train_classes | val_classes)
-        if nontrainval_classes:
-            if is_multilabel:
-                # Keep only samples whose positive labels are all within train/val classes
-                keep_mask = []
-                for row in test_df["finetune_class"]:
-                    row_classes = {i for i, v in enumerate(row) if v > 0}
-                    # Drop if any class is unseen (intersection not empty)
-                    keep_mask.append(len(row_classes & nontrainval_classes) == 0)
-                before = len(test_df)
-                test_df = test_df[keep_mask]
-                removed = before - len(test_df)
-            else:
-                before = len(test_df)
-                test_df = test_df[~test_df["finetune_class"].isin(nontrainval_classes)]
-                removed = before - len(test_df)
-            logger.warning(
-                "Removed classes from test set because they do not occur in train/val: "
-                f"{sorted(nontrainval_classes)} (samples removed: {removed})"
-            )
+    # if test_samples_file:
+    #     # With controlled test set it's possible that either
+    #     # the test set has unique classes not present in training
+    #     # So we need to remove those classes in its totality
+    #     # Detect multi-label (list / tuple / ndarray one-hot) vs single-label (scalar)
+    #     sample_val = train_df["finetune_class"].iloc[0]
+    #     is_multilabel = isinstance(sample_val, (list, tuple, np.ndarray))
+    #     def extract_present_classes(df):
+    #         if df.empty:
+    #             return set()
+    #         if not is_multilabel:
+    #             return set(df["finetune_class"].unique())
+    #         present = set()
+    #         for row in df["finetune_class"]:
+    #             # row is expected a one-hot like sequence
+    #             for idx, v in enumerate(row):
+    #                 if v > 0:
+    #                     present.add(idx)
+    #         return present
+    #     train_classes = extract_present_classes(train_df)
+    #     val_classes = extract_present_classes(val_df)
+    #     test_classes = extract_present_classes(test_df)
+    #     nontrainval_classes = test_classes - (train_classes | val_classes)
+    #     if nontrainval_classes:
+    #         if is_multilabel:
+    #             # Keep only samples whose positive labels are all within train/val classes
+    #             keep_mask = []
+    #             for row in test_df["finetune_class"]:
+    #                 row_classes = {i for i, v in enumerate(row) if v > 0}
+    #                 # Drop if any class is unseen (intersection not empty)
+    #                 keep_mask.append(len(row_classes & nontrainval_classes) == 0)
+    #             before = len(test_df)
+    #             test_df = test_df[keep_mask]
+    #             removed = before - len(test_df)
+    #         else:
+    #             before = len(test_df)
+    #             test_df = test_df[~test_df["finetune_class"].isin(nontrainval_classes)]
+    #             removed = before - len(test_df)
+    #         logger.warning(
+    #             "Removed classes from test set because they do not occur in train/val: "
+    #             f"{sorted(nontrainval_classes)} (samples removed: {removed})"
+    #         )
     return train_df, val_df, test_df
 
 def prepare_training_datasets(
