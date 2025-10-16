@@ -49,7 +49,7 @@ def _croptype_map_from_presto(
     feature_parameters["classes_list"] = classes_list
     feature_parameters["num_outputs"] = len(classes_list)
     inference_udf = openeo.UDF.from_file(
-        path=Path(__file__).resolve().parent / "predict_with_presto_udf_optimized.py",
+        path=Path(__file__).resolve().parent / "predict_with_presto_udf.py",
         context=feature_parameters,
     )
 

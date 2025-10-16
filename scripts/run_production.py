@@ -189,8 +189,8 @@ if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
     country = "mozambique"
-    multiclass = "croptype" # "croptype" or "landcover"
-    production_run = "test_croptype_20k_blocks_memberships"
+    multiclass = "landcover" # "croptype" or "landcover"
+    production_run = "test_cropland_20k_blocks_16102025"
     output_folder = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{production_run}/raw"
     )
@@ -270,7 +270,8 @@ if __name__ == "__main__":
             # Select a subset of tiles for debugging
             # This is just an example selection, adjust as needed
             # selection = ["MOZ_034", "MOZ_025", "MOZ_029", "MOZ_026"]
-            selection = ["MOZ_1420", "MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569"]
+            # selection = ["MOZ_1420", "MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569"]
+            selection = ["MOZ_1806", "MOZ_1497", "MOZ_1698", "MOZ_1606"]
             production_gdf = production_gdf[production_gdf["tile_name"].isin(selection)]
 
         if randomize_production_grid:
