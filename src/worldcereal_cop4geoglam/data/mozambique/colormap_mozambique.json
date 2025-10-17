@@ -45,16 +45,7 @@
         ]
     },
     "6": {
-        "name": "6_cowpea",
-        "color": [
-            255,
-            182,
-            193,
-            255
-        ]
-    },
-    "7": {
-        "name": "7_sweet_potato",
+        "name": "6_sweet_potato",
         "color": [
             255,
             69,
@@ -62,8 +53,8 @@
             255
         ]
     },
-    "8": {
-        "name": "8_pigeon_pea",
+    "7": {
+        "name": "7_pigeon_pea",
         "color": [
             74,
             30,
@@ -71,17 +62,8 @@
             255
         ]
     },
-    "9": {
-        "name": "9_sugarcane",
-        "color": [
-            135,
-            30,
-            117,
-            255
-        ]
-    },
-    "10": {
-        "name": "10_other_crop",
+    "8": {
+        "name": "8_other_crop",
         "color": [
             199,
             14,
@@ -98,8 +80,8 @@
             255
         ]
     },
-    "58": {
-        "name": "58_cassava-pigeon_pea",
+    "57": {
+        "name": "57_cassava-pigeon_pea",
         "color": [
             0,
             128,
@@ -107,8 +89,8 @@
             255
         ]
     },
-    "158": {
-        "name": "158_maize-cassava-pigeon_pea",
+    "157": {
+        "name": "157_maize-cassava-pigeon_pea",
         "color": [
             170,
             0,

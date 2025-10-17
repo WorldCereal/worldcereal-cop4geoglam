@@ -345,7 +345,7 @@ def spatial_smoothing(raw_results):
 
     return class_probabilities
 
-def get_croptype_prediction(croptype_probs, classes_dict, thresholds, nodata=255, ignore_classes=["cowpea", "sugarcane"]):
+def get_croptype_prediction(croptype_probs, classes_dict, thresholds, ignore_classes=["cowpea", "sugarcane"]):
 
     if isinstance(thresholds, (int, float)):
         thresholds = [thresholds] * len(classes_dict["single_crop_classes"])
@@ -354,6 +354,12 @@ def get_croptype_prediction(croptype_probs, classes_dict, thresholds, nodata=255
             raise ValueError(
                 f"Length of thresholds ({len(thresholds)}) does not match number of single classes ({len(classes_dict['single_crop_classes'])})."
             )
+
+    # requires other_mix to be assigned with the max label.
+    # we retrieve this value to use it to assign the mixed crops not foreseen in our classes
+    # and to assign it to pixels where no class passed the thresholding
+    other_mixed_value = sorted(classes_dict["mixed_crops_classes"].keys())[-1]
+
     # reassign excluded classes
     logger.debug(f"Excluding and reassigning classes from croptype prediction: {ignore_classes}")
     croptype_probs = exclude_and_reassign_classes(croptype_probs, ignore_classes=ignore_classes)
@@ -369,16 +375,14 @@ def get_croptype_prediction(croptype_probs, classes_dict, thresholds, nodata=255
         mask = croptype_labels[i].astype(bool)
         concat_matrix[mask] += str(i + 1)
 
-    concat_matrix = np.where(concat_matrix == "", nodata, concat_matrix) # keep track of no data
+    concat_matrix = np.where(concat_matrix == "", other_mixed_value, concat_matrix) # keep track of no data
 
     # cap all mixed classes with unmapped label to other_mixed value
     all_values = list(classes_dict["mixed_crops_classes"].keys()) + list(classes_dict["single_crop_classes"].keys())
     all_values = np.array(all_values).astype(str)
 
-    # requires other_mix to be assigned with the max label
-    other_mixed_value = sorted(classes_dict["mixed_crops_classes"].keys())[-1]
-
-    mask_invalid = (concat_matrix != nodata) & (~np.isin(concat_matrix, all_values))
+    # assign other_mix class to mixed classes not in our defined classes
+    mask_invalid = ~np.isin(concat_matrix, all_values)
     concat_matrix[mask_invalid] = other_mixed_value
 
     croptype_pred = concat_matrix.astype(np.uint8)
@@ -429,7 +433,7 @@ def process_tile(
 
     # -----------------------------------------------------
     # Get the classification of croptype
-    clf_array = get_croptype_prediction(raw_results, classes_dict, thresholds, nodata=nodata, ignore_classes=ignore_classes)
+    clf_array = get_croptype_prediction(raw_results, classes_dict, thresholds, ignore_classes=ignore_classes)
     # -----------------------------------------------------
 
     # Create mask if geometry provided
@@ -452,7 +456,7 @@ def process_tile(
                 logger.warning(
                     f"Tile {tile_id} has no overlap with country '{country_name}', writing full nodata"
                 )
-                clf_array = nodata
+                clf_array[:] = nodata
             else:
                 outside_mask = ~inside_mask
                 clf_array[outside_mask] = nodata
@@ -607,10 +611,10 @@ def main():
         "--raw-dir",
         "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/production/v1_croptype/raw",
         "--postprocess-dir",
-        "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/production/v1_croptype_giorgia/raw/postprocessed_v2",
-        # "--reprocess-tiles",
+        "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/production/v1_croptype_giorgia/raw/postprocessed",
+        "--reprocess-tiles",
         "--generate_cog",
-        "--overwrite-final",
+        # "--overwrite-final",
     ]
     # manual_args = None
 
@@ -621,7 +625,14 @@ def main():
 
     no_crop_value = 254
 
-    thresholds = [0.20, 0.24, 0.20, 0.24, 0.23, 0.20, 0.24, 0.20]
+    # thresholds = 0.2
+    # thresholds = [0.20, 0.24, 0.20, 0.24, 0.23, 0.20, 0.24, 0.20]
+    # thresholds = [0.18, 0.24, 0.20, 0.24, 0.23, 0.20, 0.24, 0.25]
+    # thresholds = [0.18, 0.24, 0.19, 0.24, 0.22, 0.19, 0.24, 0.28]
+    # thresholds = [0.18, 0.24, 0.17, 0.24, 0.22, 0.17, 0.25, 0.32]
+    # thresholds = [0.19, 0.25, 0.16, 0.25, 0.22, 0.15, 0.26, 0.32]
+    thresholds = [0.18, 0.24, 0.16, 0.25, 0.21, 0.15, 0.24, 0.30]  # nodata replaced with other_mixed
+
     classes_dict = {
         "mixed_crops_classes": {
             15: "maize-cassava",
@@ -646,10 +657,13 @@ def main():
     classes_dict_mapping = {**classes_dict["single_crop_classes"], **classes_dict["mixed_crops_classes"]}
     classes_dict_mapping[no_crop_value] = "no_crop"
 
+    output_dir = output_dir.with_name(output_dir.name + f"_th{str(thresholds)}")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # #### DEBUG
+    # ### DEBUG
+    # failing_tag = ['MOZ_1204', 'MOZ_1767']
     # raw_tiles = list(raw_output_path.rglob("*croptype_*.tif"))
+    # raw_tiles = [r for r in raw_tiles for tag in failing_tag if tag in str(r)]
     # for i, item in enumerate(raw_tiles):
     #     if 'processed' in str(item):
     #         continue
@@ -693,6 +707,7 @@ def main():
 
         # Get raw tiles
         raw_tiles = list(raw_output_path.rglob("*croptype_*.tif"))
+        # raw_tiles = [r for r in raw_tiles for tag in failing_tag if tag in str(r)]
         logger.info(f"Found {len(raw_tiles)} raw tiles")
         if not raw_tiles:
             logger.error("No raw tiles found; aborting")
