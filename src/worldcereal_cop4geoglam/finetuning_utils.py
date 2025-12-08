@@ -50,6 +50,7 @@ def get_class_mappings(country: str = "kenya") -> Dict:
 
     return CLASS_MAPPINGS
 
+
 def get_training_dfs_from_parquet(
     parquet_files: Union[Union[Path, str], List[Union[Path, str]]],
     timestep_freq: Literal["month", "dekad"] = "month",
@@ -59,8 +60,7 @@ def get_training_dfs_from_parquet(
     val_samples_file: Optional[Union[Path, str]] = None,
     test_samples_file: Optional[Union[Path, str]] = None,
     debug: bool = False,
-    country: str = "mozambique"
-
+    country: str = "mozambique",
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Prepare training, validation, and test DataFrames from parquet files for presto model fine-tuning.
@@ -119,18 +119,38 @@ def get_training_dfs_from_parquet(
     if use_class_membership:
         # sample_memberships = sample_memberships.drop_duplicates(subset=['sample_id']).reset_index(drop=True)
         if country not in COUNTRY_SOURCE_FILES:
-            raise ValueError(f"Country `{country}` not recognized for class membership usage.")
+            raise ValueError(
+                f"Country `{country}` not recognized for class membership usage."
+            )
         if COUNTRY_SOURCE_FILES[country] is None:
-            raise ValueError(f"Country `{country}` does not have a valid source file for class membership usage.")
-        sample_memberships = pd.read_parquet(COUNTRY_SOURCE_FILES[country])[['sample_id','membership']]
-        df = df.merge(sample_memberships, on='sample_id', how='left')
+            raise ValueError(
+                f"Country `{country}` does not have a valid source file for class membership usage."
+            )
+        sample_memberships = pd.read_parquet(
+            COUNTRY_SOURCE_FILES[country], engine="fastparquet"
+        )[["sample_id", "membership", "trees_in_cropfield"]]
+        df = df.merge(sample_memberships, on="sample_id", how="left")
         df = df[df["membership"].notnull()]
-        df['membership'] = df["membership"].apply(lambda x: x.tolist() if isinstance(x, np.ndarray) else x)
-        df.rename(columns={'membership':'finetune_class'}, inplace=True)
+        df["membership"] = df["membership"].apply(
+            lambda x: x.tolist() if isinstance(x, np.ndarray) else x
+        )
+        df.rename(columns={"membership": "finetune_class"}, inplace=True)
     else:
         df = map_classes(df, finetune_classes, class_mappings=class_mappings)
 
-    # Don't apply small classes filtering in case of fuzzy labelling
+    df = df[
+        ~(
+            df.sample_id.str.contains("_SR_")
+            | df.sample_id.str.contains("_AL_")
+            | df.sample_id.str.contains("_EXP_")
+        )
+    ]
+
+    # # Don't apply small classes filtering in case of fuzzy labelling
+    # logger.info("Removing agroforestry")
+    # logger.info(f"Total samples before removing agroforestry: {len(df)}")
+    # df = df[df.trees_in_cropfield != "trees_yes"]
+    # logger.info(f"Total samples after removing agroforestry: {len(df)}")
     if len(df.finetune_class.iloc[0]) == 1:
         # Remove classes with too few samples for stratification
         df = remove_small_classes(df, min_samples=10)
@@ -147,8 +167,9 @@ def get_training_dfs_from_parquet(
         # train_df, test_df = split_df(df, val_size=0.2)
         # TO DO: add possibility of per-class stratification to original split_df function
         trainval_df, test_df = train_test_split(
-            df, test_size=0.2, random_state=42, stratify=df["finetune_class"]
-        )
+            df, test_size=0.15, random_state=42
+        )  # , stratify=df["finetune_class"]
+        # )
     # train_df, val_df = split_df(train_df, val_size=0.2)
     # Remove classes with too few samples for stratification, now on trainval_df
     # trainval_df = remove_small_classes(trainval_df, min_samples=5)
@@ -160,12 +181,9 @@ def get_training_dfs_from_parquet(
         )
     else:
         logger.info("Random `train` vs `val` split ...")
-        train_df, val_df = train_test_split(
-            trainval_df,
-            test_size=0.2,
-            random_state=42,
-            stratify=trainval_df["finetune_class"],
-        )
+        train_df, val_df = train_test_split(trainval_df, test_size=0.2, random_state=42)
+        # stratify=trainval_df["finetune_class"],
+        # )
     # if test_samples_file:
     #     # With controlled test set it's possible that either
     #     # the test set has unique classes not present in training
@@ -209,6 +227,7 @@ def get_training_dfs_from_parquet(
     #             f"{sorted(nontrainval_classes)} (samples removed: {removed})"
     #         )
     return train_df, val_df, test_df
+
 
 def prepare_training_datasets(
     train_df: pd.DataFrame,
