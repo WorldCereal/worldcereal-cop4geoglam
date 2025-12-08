@@ -130,13 +130,14 @@ def create_worldcereal_cop4geoglam_inferencejob(
 
     # Submit the job
     job_options = {
-        "driver-memory": "4g",
+        "driver-memory": "2g",
         "executor-memory": "1g",
         "executor-memoryOverhead": "2g",
         "python-memory": "3g",
         "soft-errors": 0.1,
         "image-name": "python311",
         "max-executors": 10,
+        "etl_organization_id": 10523,
         "udf-dependency-archives": [
             f"{ONNX_DEPS_URL}#onnx_deps",
             f"{FEATURE_DEPS_URL}#feature_deps",
@@ -189,16 +190,16 @@ if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
     country = "mozambique"
-    multiclass = "croptype" # "croptype" or "landcover"
-    production_run = "test_croptype_20k_blocks_memberships"
+    multiclass = "croptype"  # "croptype" or "landcover"
+    production_run = "v1_croptype"
     output_folder = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{production_run}/raw"
     )
     product_type = WorldCerealProductType.CROPTYPE
     epsg = 32737
-    parallel_jobs = 15
+    parallel_jobs = 25
     randomize_production_grid = (
-        False  # If True, it will randomly select tiles from the production grid
+        True  # If True, it will randomly select tiles from the production grid
     )
     predict_with_presto = True  # If True, it will use presto for croptype prediction
     if multiclass == "croptype":
@@ -270,7 +271,8 @@ if __name__ == "__main__":
             # Select a subset of tiles for debugging
             # This is just an example selection, adjust as needed
             # selection = ["MOZ_034", "MOZ_025", "MOZ_029", "MOZ_026"]
-            selection = ["MOZ_1420", "MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569"]
+            # selection = ["MOZ_1420", "MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569"]
+            selection = ["MOZ_1806", "MOZ_1497", "MOZ_1698", "MOZ_1606"]
             production_gdf = production_gdf[production_gdf["tile_name"].isin(selection)]
 
         if randomize_production_grid:
@@ -321,7 +323,7 @@ if __name__ == "__main__":
     # No postprocessing for the production run as we do this afterwards
     postprocess_parameters = PostprocessParameters(
         enable=False,  # True,
-        save_intermediate=False, #True,  # saves not postprocessed
+        save_intermediate=False,  # True,  # saves not postprocessed
     )
     # Retry loop starts here
     attempt = 0
@@ -342,7 +344,7 @@ if __name__ == "__main__":
                     create_worldcereal_cop4geoglam_inferencejob,
                     epsg=epsg,
                     product_type=product_type,
-                    cropland_parameters= None, # cropland_parameters,
+                    cropland_parameters=None,  # cropland_parameters,
                     croptype_parameters=croptype_parameters,
                     postprocess_parameters=postprocess_parameters,
                     target_epsg=epsg,
