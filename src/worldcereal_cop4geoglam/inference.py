@@ -5,7 +5,7 @@ import openeo
 from openeo import DataCube
 from openeo_gfmap import Backend, BackendContext, BoundingBoxExtent, TemporalContext
 from openeo_gfmap.backend import BACKEND_CONNECTIONS
-from worldcereal.openeo.mapping import _cropland_map, _croptype_map, _postprocess
+from worldcereal.openeo.mapping import _cropland_map, _croptype_map
 from worldcereal.openeo.preprocessing import worldcereal_preprocessed_inputs
 from worldcereal.parameters import (
     CropLandParameters,
@@ -19,27 +19,11 @@ def _croptype_map_from_presto(
     inputs: DataCube,
     temporal_extent: TemporalContext,
     croptype_parameters: "CropTypeParameters",
-    postprocess_parameters: "PostprocessParameters",
-    cropland_mask: DataCube = None,
+    cropland_parameters: CropLandParameters,
     classes_list: Optional[list] = None,
 ) -> DataCube:
     """Method to produce croptype map from preprocessed inputs, using
     a Presto feature extractor and a CatBoost classifier.
-
-    Parameters
-    ----------
-    inputs : DataCube
-        preprocessed input cube
-    temporal_extent : TemporalContext
-        temporal extent of the input cube
-    cropland_mask : DataCube, optional
-        optional cropland mask, by default None
-    lookup_table: dict,
-        Mapping of class names to class labels, ordered by model output.
-    Returns
-    -------
-    DataCube
-        croptype labels and probability
     """
 
     # Run inference
@@ -73,20 +57,20 @@ def _croptype_map_from_presto(
     if cropland_mask is not None:
         predictions = predictions.mask(cropland_mask == 0, replacement=65335)
 
-    # Postprocess
-    if postprocess_parameters.enable:
-        if postprocess_parameters.save_intermediate:
-            predictions = predictions.save_result(
-                format="GTiff",
-                options=dict(
-                    filename_prefix=f"{WorldCerealProductType.CROPTYPE.value}-raw_{temporal_extent.start_date}_{temporal_extent.end_date}"
-                ),
-            )
-        predictions = _postprocess(
-            predictions,
-            postprocess_parameters,
-            classifier_url=croptype_parameters.classifier_parameters.classifier_url,
-        )
+    # # Postprocess
+    # if postprocess_parameters.enable:
+    #     if postprocess_parameters.save_intermediate:
+    #         predictions = predictions.save_result(
+    #             format="GTiff",
+    #             options=dict(
+    #                 filename_prefix=f"{WorldCerealProductType.CROPTYPE.value}-raw_{temporal_extent.start_date}_{temporal_extent.end_date}"
+    #             ),
+    #         )
+    #     predictions = _postprocess(
+    #         predictions,
+    #         postprocess_parameters,
+    #         classifier_url=croptype_parameters.classifier_parameters.classifier_url,
+    #     )
 
     # Cast to uint16
     # classes = compress_uint16(classes)
@@ -100,7 +84,6 @@ def create_inference_process_graph(
     product_type: WorldCerealProductType = WorldCerealProductType.CROPLAND,
     cropland_parameters: CropLandParameters = CropLandParameters(),
     croptype_parameters: CropTypeParameters = CropTypeParameters(),
-    postprocess_parameters: PostprocessParameters = PostprocessParameters(),
     s1_orbit_state: Optional[Literal["ASCENDING", "DESCENDING"]] = None,
     out_format: str = "GTiff",
     backend_context: BackendContext = BackendContext(Backend.CDSE),
@@ -108,6 +91,7 @@ def create_inference_process_graph(
     target_epsg: Optional[int] = None,
     predict_with_presto: bool = False,
     classes_list: Optional[list] = None,
+    connection: Optional[openeo.Connection] = None,
 ) -> openeo.DataCube:
     """Wrapper function that creates the inference openEO process graph.
 
@@ -125,8 +109,6 @@ def create_inference_process_graph(
         Parameters for the croptype product inference pipeline. Only required
         whenever `product_type` is set to `WorldCerealProductType.CROPTYPE`,
         will be ignored otherwise.
-    postprocess_parameters: PostprocessParameters
-        Parameters for the postprocessing pipeline. By default disabled.
     s1_orbit_state: Optional[Literal["ASCENDING", "DESCENDING"]]
         Sentinel-1 orbit state to use for the inference. If not provided,
         the orbit state will be dynamically determined based on the spatial extent.
@@ -139,12 +121,15 @@ def create_inference_process_graph(
     target_epsg: Optional[int] = None
         EPSG code to use for the output products. If not provided, the
         default EPSG will be used.
+    connection: Optional[openeo.Connection] = None,
+        Optional OpenEO connection to use. If not provided, a new connection
+        will be created based on the backend_context.
 
     Returns
     -------
-    openeo.DataCube
-        DataCube object representing the inference process graph.
-        This object can be used to execute the job on the OpenEO backend.
+    List[openeo.DataCube]
+        A list with one or more result objects or a list of DataCube objects, representing the inference
+        process graph. This object can be used to execute the job on the OpenEO backend.
         The result will be a DataCube with the classification results.
 
     Raises
@@ -161,7 +146,8 @@ def create_inference_process_graph(
         raise ValueError(f"Format {format} not supported.")
 
     # Make a connection to the OpenEO backend
-    connection = BACKEND_CONNECTIONS[backend_context.backend]()
+    if connection is None:
+        connection = BACKEND_CONNECTIONS[backend_context.backend]()
 
     # Preparing the input cube for inference
     inputs = worldcereal_preprocessed_inputs(
@@ -180,11 +166,10 @@ def create_inference_process_graph(
 
     # Construct the feature extraction and model inference pipeline
     if product_type == WorldCerealProductType.CROPLAND:
-        classes = _cropland_map(
+        results = _cropland_map(
             inputs,
             temporal_extent,
             cropland_parameters=cropland_parameters,
-            postprocess_parameters=postprocess_parameters,
         )
 
     elif product_type == WorldCerealProductType.CROPTYPE:
@@ -193,59 +178,23 @@ def create_inference_process_graph(
                 f"Please provide a valid `croptype_parameters` parameter."
                 f" Received: {croptype_parameters}"
             )
-        # First compute cropland map
-        if croptype_parameters.mask_cropland:
-            cropland_mask = _cropland_map(
-                inputs,
-                temporal_extent,
-                cropland_parameters=cropland_parameters,
-                postprocess_parameters=postprocess_parameters,
-            )
-
-            # Save final mask if required
-            if croptype_parameters.save_mask:
-                cropland_mask = cropland_mask.save_result(
-                    format="GTiff",
-                    options=dict(
-                        filename_prefix=f"{WorldCerealProductType.CROPLAND.value}_{temporal_extent.start_date}_{temporal_extent.end_date}",
-                    ),
-                )
-
-            # To use it as a mask, we need to filter out the classification band
-            # Use the generic 'process' to avoid client-side errors on missing metadata
-            cropland_mask = cropland_mask.process(
-                process_id="filter_bands",
-                arguments=dict(
-                    data=cropland_mask,
-                    bands=["classification"],
-                ),
-            )
 
         # Generate crop type map
         if predict_with_presto:
-            classes = _croptype_map_from_presto(
+            results = _croptype_map_from_presto(
                 inputs,
                 temporal_extent,
                 croptype_parameters=croptype_parameters,
-                postprocess_parameters=postprocess_parameters,
-                cropland_mask=cropland_mask if croptype_parameters.mask_cropland else None,
-                classes_list=classes_list
+                cropland_parameters=cropland_parameters,
+                classes_list=classes_list,
             )
         else:
-            classes = _croptype_map(
+            # Generate crop type map with optional cropland masking
+            results = _croptype_map(
                 inputs,
                 temporal_extent,
+                cropland_parameters=cropland_parameters,
                 croptype_parameters=croptype_parameters,
-                cropland_mask=cropland_mask if croptype_parameters.mask_cropland else None,
-                postprocess_parameters=postprocess_parameters,
             )
 
-    # Save the final result
-    classes = classes.save_result(
-        format=out_format,
-        options=dict(
-            filename_prefix=f"{product_type.value}_{temporal_extent.start_date}_{temporal_extent.end_date}",
-        ),
-    )
-
-    return classes
+    return results
