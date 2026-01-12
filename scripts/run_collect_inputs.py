@@ -82,7 +82,6 @@ def create_worldcereal_inputsjob(
         "driver-memory": "4g",
         "executor-memory": "2g",
         "executor-memoryOverhead": "1g",
-        # "etl_organization_id": 10523,
         "python-memory": "4g",
         "soft-errors": 0.1,
         "image-name": "python311",

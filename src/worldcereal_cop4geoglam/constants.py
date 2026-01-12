@@ -3,7 +3,7 @@ from typing import Dict, List
 PRESTO_PRETRAINED_MODEL_PATH: Dict[str, str] = {
     "LANDCOVER": "/projects/worldcereal/COP4GEOGLAM/presto-prometheo-landcover-month-LANDCOVER10-augment=True-balance=True-timeexplicit=False-run=202507170930_encoder.pt",
     "CROPTYPE": "/projects/worldcereal/COP4GEOGLAM/presto-prometheo-landcover-month-CROPTYPE27-augment=True-balance=True-timeexplicit=True-run=202507181013_encoder.pt",
-    "DEFAULT": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/models/PhaseII/presto-ss-wc_longparquet_random-window-cut_no-time-token_epoch96.pt"
+    "DEFAULT": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/models/PhaseII/presto-ss-wc_longparquet_random-window-cut_no-time-token_epoch96.pt",
 }
 
 COUNTRY_SOURCE_FILES: Dict[str, str] = {
@@ -14,17 +14,16 @@ COUNTRY_PARQUET_FILES: Dict[str, Dict[str, List[str]]] = {
     "kenya": {
         "month": [
             "/vitodata/worldcereal/data/COP4GEOGLAM/kenya/trainingdata/2021_KEN_COPERNICUS-GEOGLAM-SR_POINT_111.geoparquet",
-            "/vitodata/worldcereal/data/COP4GEOGLAM/kenya/trainingdata/2021_KEN_COPERNICUS-GEOGLAM-LR_POINT_111.geoparquet"
+            "/vitodata/worldcereal/data/COP4GEOGLAM/kenya/trainingdata/2021_KEN_COPERNICUS-GEOGLAM-LR_POINT_111.geoparquet",
         ],
-        "dekad": []
+        "dekad": [],
     },
-
     "moldova": {
         "month": [
             # "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/worldcereal_merged_extractions.parquet"
             "/vitodata/worldcereal/data/COP4GEOGLAM/moldova/trainingdata/MDA_extractions_2024-09-01_2025-08-31_controlled.parquet"
         ],
-        "dekad": []
+        "dekad": [],
     },
     "mozambique": {
         "month": [
@@ -32,38 +31,37 @@ COUNTRY_PARQUET_FILES: Dict[str, Dict[str, List[str]]] = {
             # "/projects/worldcereal/COP4GEOGLAM/mozambique/worldcereal_merged_extractions.parquet/ref_id=2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS",
             "/projects/worldcereal/COP4GEOGLAM/mozambique/worldcereal_merged_extractions.parquet/2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS_corr.parquet"
         ],
-        "dekad": []
-    }
+        "dekad": [],
+    },
 }
 
 COUNTRY_CLASS_MAPPINGS: Dict[str, str] = {
     "kenya": "kenya",
     "moldova": "moldova",
-    "mozambique": "mozambique"
+    "mozambique": "mozambique",
 }
 
 PRODUCTION_MODELS_URLS: Dict[str, Dict[str, Dict[str, str]]] = {
     "moldova": {
-        "presto":{
-            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-new_val_ids-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-run%3D202508271322_encoder.pt",
-            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-new_val_ids-month-CROPTYPE_Moldova-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-run%3D202508271333_encoder.pt",
+        "presto": {
+            "cropland": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/presto-prometheo-cop4geoglam-new_val_ids-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-run%3D202508271322_encoder.pt",
+            "croptype": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/moldova/presto-prometheo-cop4geoglam-with-sugarbeet-month-CROPTYPE_Moldova-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-run%3D202512121302_encoder.pt",
         },
         "catboost": {
-            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271322_DownstreamCatBoost_cropland_v100-MDA_balance%3DTrue.onnx",
-            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271333_DownstreamCatBoost_croptype_v100-MDA_balance%3DTrue.onnx",
-        }
+            "cropland": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/Presto_run%3D202508271322_DownstreamCatBoost_cropland_v100-MDA_balance%3DTrue.onnx",
+            "croptype": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/moldova/Presto_run%3D202512111538_DownstreamCatBoost_croptype_v130-MDA-withsugarbeet_balance%3DTrue.onnx",
+        },
     },
-    "mozambique":{
-        "presto":{
-            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-exp_points_with_wc-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510121012_encoder.pt",
-            "landcover":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-orig_points_with_wc-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510131141.pt",
-            "croptype":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-test-fuzzy-memberships-month-CROPTYPE_Mozambique_fuzzy-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510151422.pt",
+    "mozambique": {
+        "presto": {
+            "cropland": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-exp_points_with_wc-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510121012_encoder.pt",
+            "landcover": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/cropland_new/presto-prometheo-cop4geoglam-orig_point_mapping_extended-month-LANDCOVER10-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510161406.pt",
+            "croptype": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/presto/presto-prometheo-cop4geoglam-test-fuzzy-memberships-month-CROPTYPE_Mozambique_fuzzy-augment%3DFalse-balance%3DTrue-timeexplicit%3DFalse-freezing%3DTrue-run%3D202510151422.pt",
             # "croptype":"/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/models/presto/test_fuzzy/presto-prometheo-cop4geoglam-test-fuzzy-month-CROPTYPE_Mozambique_fuzzy-augment=False-balance=True-timeexplicit=False-freezing=True-run=202510081032.pt",
         },
         "catboost": {
-            "cropland":"https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202510121012_DownstreamCatBoost_cropland_v0_balance%3DTrue.onnx",
-            "croptype":"",
-        }
-
-    }
+            "cropland": "https://artifactory.vgt.vito.be/artifactory/auxdata-public/worldcereal/Copernicus4Geoglam/mozambique/catboost/Presto_run%3D202510121012_DownstreamCatBoost_cropland_v0_balance%3DTrue.onnx",
+            "croptype": "",
+        },
+    },
 }

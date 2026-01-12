@@ -37,11 +37,18 @@ from worldcereal_cop4geoglam.finetuning_utils import (
 def reassign_memberships(membership_list, ignore_classes, classes_list):
     ignore_classes_indices = [
         classes_list.index(cls) for cls in ignore_classes if cls in classes_list
-        ]
+    ]
     other_class_index = classes_list.index("other")
-    membership_list[other_class_index] += np.array(membership_list)[ignore_classes_indices].sum()
-    membership_list = [membership_list[i] for i in range(len(membership_list)) if i not in ignore_classes_indices]
+    membership_list[other_class_index] += np.array(membership_list)[
+        ignore_classes_indices
+    ].sum()
+    membership_list = [
+        membership_list[i]
+        for i in range(len(membership_list))
+        if i not in ignore_classes_indices
+    ]
     return membership_list
+
 
 def get_parquet_file_list(
     timestep_freq: Literal["month", "dekad"] = "dekad", country: str = "moldova"
@@ -129,9 +136,9 @@ def main(args):
     batch_size = (
         256  # For small datasets we need to keep this small to avoid overfitting!
     )
-    patience = 10
+    patience = 6
     num_workers = 2
-    unfreeze_epoch = 30  # Epoch to start unfreezing layers gradually
+    unfreeze_epoch = 3  # Epoch to start unfreezing layers gradually
 
     # ------------------------------------------
 
@@ -181,16 +188,16 @@ def main(args):
         "sugarcane",
         "other",
     ]
-    ignore_classes = [] #["cowpea", "sugarcane"]
+    ignore_classes = []  # ["cowpea", "sugarcane"]
     if ignore_classes != []:
         logger.info(f"Ignoring classes: {ignore_classes} from datasets")
-        train_df['finetune_class'] = train_df['finetune_class'].apply(
+        train_df["finetune_class"] = train_df["finetune_class"].apply(
             lambda x: reassign_memberships(x, ignore_classes, classes_list)
         )
-        val_df['finetune_class'] = val_df['finetune_class'].apply(
+        val_df["finetune_class"] = val_df["finetune_class"].apply(
             lambda x: reassign_memberships(x, ignore_classes, classes_list)
         )
-        test_df['finetune_class'] = test_df['finetune_class'].apply(
+        test_df["finetune_class"] = test_df["finetune_class"].apply(
             lambda x: reassign_memberships(x, ignore_classes, classes_list)
         )
         classes_list = [c for c in classes_list if c not in ignore_classes]
@@ -202,8 +209,21 @@ def main(args):
     # num_classes = train_df["finetune_class"].nunique()
     num_classes = len(classes_list)
 
+    # logger.info(f"Train samples before filtering AL/SR/EXP: {len(train_df)}")
+    # train_df = train_df[
+    #     ~(
+    #         train_df.sample_id.str.contains("_SR_")
+    #         | train_df.sample_id.str.contains("_AL_")
+    #         | train_df.sample_id.str.contains("_EXP_")
+    #     )
+    # ]
+    # logger.info(f"Train samples after filtering AL/SR/EXP: {len(train_df)}")
+
+    logger.info("Train label distribution:")
+    logger.info(train_df.finetune_class.value_counts())
+
     # We have to make sure we don't have AL or SR samples in the test set
-    logger.info(f"Validation samples before filtering AL/SR/EXP: {len(test_df)}")
+    logger.info(f"Validation samples before filtering AL/SR/EXP: {len(val_df)}")
     val_df = val_df[
         ~(
             val_df.sample_id.str.contains("_SR_")
@@ -211,7 +231,7 @@ def main(args):
             | val_df.sample_id.str.contains("_EXP_")
         )
     ]
-    logger.info(f"Validation samples after filtering AL/SR/EXP: {len(test_df)}")
+    logger.info(f"Validation samples after filtering AL/SR/EXP: {len(val_df)}")
 
     logger.info(f"Test samples before filtering AL/SR/EXP: {len(test_df)}")
     test_df = test_df[
@@ -250,7 +270,6 @@ def main(args):
     train_df.to_parquet(Path(output_dir) / "train_df.parquet")
     val_df.to_parquet(Path(output_dir) / "val_df.parquet")
     test_df.to_parquet(Path(output_dir) / "test_df.parquet")
-
 
     # ----------------------------------------------------
 
@@ -316,7 +335,7 @@ def main(args):
     if task_type == "binary":
         loss_fn = nn.BCEWithLogitsLoss()
     elif task_type == "multiclass":
-        loss_fn = nn.CrossEntropyLoss()
+        loss_fn = nn.CrossEntropyLoss(label_smoothing=0.15)
     else:
         raise ValueError(
             f"Task type {task_type} is not supported. "
@@ -354,7 +373,7 @@ def main(args):
     # ReduceLROnPlateau
     reduce_lr_on_plateau_scheduler = lr_scheduler.ReduceLROnPlateau(
         optimizer, patience=3
-    ) #, factor=0.5, verbose=True, min_lr=1e-6
+    )  # , factor=0.5, verbose=True, min_lr=1e-6
     scheduler = reduce_lr_on_plateau_scheduler
 
     # Setup dataloaders
@@ -406,13 +425,15 @@ def main(args):
 
     # Evaluate the finetuned model
     logger.info("Evaluating the finetuned model...")
-    _, confusionmatrix, confusionmatrix_norm, all_targets, all_probs = evaluate_finetuned_model(
-        finetuned_model,
-        test_ds,
-        num_workers,
-        batch_size,
-        time_explicit=time_explicit,
-        classes_list=classes_list,
+    _, confusionmatrix, confusionmatrix_norm, all_targets, all_probs = (
+        evaluate_finetuned_model(
+            finetuned_model,
+            test_ds,
+            num_workers,
+            batch_size,
+            time_explicit=time_explicit,
+            classes_list=classes_list,
+        )
     )
 
     # Adjust figure size based on label length
@@ -459,7 +480,12 @@ def main(args):
     target_df["sample_id"] = test_df["sample_id"].values
     target_df["source"] = "target"
     results_df = pd.concat([target_df, prediction_df], ignore_index=True)
-    results_df.to_parquet(Path(output_dir) / f"predictions_presto_run={timestamp_ind}.parquet")
+    results_df.to_parquet(
+        Path(output_dir) / f"predictions_presto_run={timestamp_ind}.parquet"
+    )
+
+    np.save(Path(output_dir) / "all_targets.npy", all_targets)
+    np.save(Path(output_dir) / "all_probs.npy", all_probs)
 
     ### CANNOT DO THE BELOW AS WE HAVE TO FIX THE REPORTING
     # eval_results.round(2).to_csv(
