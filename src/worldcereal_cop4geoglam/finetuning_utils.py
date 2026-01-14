@@ -25,7 +25,7 @@ from worldcereal.train.data import (
 
 from worldcereal_cop4geoglam import data
 from worldcereal_cop4geoglam.constants import COUNTRY_SOURCE_FILES
-from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
+from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset, SensorMaskingConfig
 
 
 def get_class_mappings(country: str = "kenya") -> Dict:
@@ -241,8 +241,7 @@ def prepare_training_datasets(
     num_outputs: int = 1,
     classes_list: Optional[List[str]] = None,
     fuzzy_targets: bool = False,
-    # masking_strategy_train: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
-    # masking_strategy_val: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
+    masking_config_train: Optional[SensorMaskingConfig] = None,
     label_jitter: int = 0,
     label_window: int = 0,
 ) -> Tuple[Cop4GeoLabelledDataset, Cop4GeoLabelledDataset, Cop4GeoLabelledDataset]:
@@ -277,10 +276,8 @@ def prepare_training_datasets(
         If True, the `finetune_class` column in the dataframe is expected to contain
         soft/fuzzy labels (list/array of class membership probabilities) instead of hard labels.
         Only used if `task_type` is "multiclass".
-    masking_strategy_train : MaskingStrategy, default=askingMode.NONE
-        Masking strategy for training dataset.
-    masking_strategy_val : MaskingStrategy, default=MaskingMode.NONE
-        Masking strategy for validation and test datasets.
+    masking_config_train: Optional[SensorMaskingConfig] = None,
+        Configuration for sensor masking during training. If None, no masking is applied.
     label_jitter : int, default=0
         Jittering true position of label(s). If 0, no jittering is applied.
     label_window : int, default=0
@@ -301,7 +298,7 @@ def prepare_training_datasets(
         classes_list=classes_list if classes_list is not None else [],
         fuzzy_targets=fuzzy_targets,
         augment=augment,
-        # masking_strategy=masking_strategy_train,
+        masking_config=masking_config_train,
         label_jitter=label_jitter,
         label_window=label_window,
     )
