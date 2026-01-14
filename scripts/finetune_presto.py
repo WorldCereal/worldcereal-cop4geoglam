@@ -19,6 +19,7 @@ from torch.utils.data import DataLoader
 
 # from worldcereal_in_season.datasets import MaskingStrategy
 from worldcereal.train.data import get_training_dfs_from_parquet
+from worldcereal.train.datasets import SensorMaskingConfig
 
 from worldcereal_cop4geoglam.constants import (
     COUNTRY_PARQUET_FILES,
@@ -88,6 +89,13 @@ def main(args):
     )
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+    # Setup logging
+    initialize_logging(
+        log_file=Path(output_dir) / "logs" / f"{experiment_name}.log",
+        level="INFO",
+        console_filter_keyword="PROGRESS",
+    )
+
     CLASS_MAPPINGS = get_class_mappings(country)
 
     # Training parameters
@@ -109,21 +117,12 @@ def main(args):
         )
 
     epochs = 100
-    batch_size = (
-        256  # For small datasets we need to keep this small to avoid overfitting!
-    )
+    batch_size = 1024  # Too small can result in noisy gradients!
     patience = 10
     num_workers = 2
-    unfreeze_epoch = 30  # Epoch to start unfreezing layers gradually
+    unfreeze_epoch = 100  # Epoch to start unfreezing layers gradually
 
     # ------------------------------------------
-
-    # Setup logging
-    initialize_logging(
-        log_file=Path(output_dir) / "logs" / f"{experiment_name}.log",
-        level="INFO",
-        console_filter_keyword="PROGRESS",
-    )
 
     # Get the train/val/test dataframes
     train_df, val_df, test_df = get_training_dfs_from_parquet(
@@ -136,14 +135,35 @@ def main(args):
         debug=debug,
     )
 
-    logger.warning("Still applying a patch here ...")
-    train_df = train_df[train_df["available_timesteps"] >= 12]
-    val_df = val_df[val_df["available_timesteps"] >= 12]
-    test_df = test_df[test_df["available_timesteps"] >= 12]
+    logger.info("Train label distribution:")
+    logger.info(train_df.finetune_class.value_counts())
+
+    # We have to make sure we don't have AL or SR samples in the test set
+    logger.info(f"Validation samples before filtering AL/SR/EXP: {len(val_df)}")
+    val_df = val_df[
+        ~(
+            val_df.sample_id.str.contains("_SR_")
+            | val_df.sample_id.str.contains("_AL_")
+            | val_df.sample_id.str.contains("_EXP_")
+        )
+    ]
+    logger.info(f"Validation samples after filtering AL/SR/EXP: {len(val_df)}")
+
+    logger.info(f"Test samples before filtering AL/SR/EXP: {len(test_df)}")
+    test_df = test_df[
+        ~(
+            test_df.sample_id.str.contains("_SR_")
+            | test_df.sample_id.str.contains("_AL_")
+            | test_df.sample_id.str.contains("_EXP_")
+        )
+    ]
+    logger.info(f"Test samples after filtering AL/SR/EXP: {len(test_df)}")
 
     train_df.to_parquet(Path(output_dir) / "train_df.parquet")
     val_df.to_parquet(Path(output_dir) / "val_df.parquet")
     test_df.to_parquet(Path(output_dir) / "test_df.parquet")
+
+    # ----------------------------------------------------
 
     classes_list = list(sorted(set(CLASS_MAPPINGS[finetune_classes].values())))
     classes_list = [
@@ -171,6 +191,19 @@ def main(args):
     # Use type casting to specify to mypy that task_type is a valid Literal value
     task_type_literal: Literal["binary", "multiclass"] = task_type  # type: ignore
 
+    # Create masking config for training
+    masking_config = SensorMaskingConfig(
+        enable=True,
+        s1_full_dropout_prob=0.05,
+        s1_timestep_dropout_prob=0.1,
+        s2_cloud_timestep_prob=0.1,
+        s2_cloud_block_prob=0.05,
+        s2_cloud_block_min=2,
+        s2_cloud_block_max=3,
+        meteo_timestep_dropout_prob=0.03,
+        dem_dropout_prob=0.01,
+    )
+
     # Construct training and validation datasets with masking parameters
     train_ds, val_ds, test_ds = prepare_training_datasets(
         train_df,
@@ -179,6 +212,7 @@ def main(args):
         num_timesteps=12 if timestep_freq == "month" else 36,
         timestep_freq=timestep_freq,
         augment=augment,
+        masking_config_train=masking_config,
         time_explicit=time_explicit,
         task_type=task_type_literal,
         num_outputs=num_outputs,
@@ -206,7 +240,7 @@ def main(args):
     if task_type == "binary":
         loss_fn = nn.BCEWithLogitsLoss()
     elif task_type == "multiclass":
-        loss_fn = nn.CrossEntropyLoss(ignore_index=NODATAVALUE)
+        loss_fn = nn.CrossEntropyLoss(ignore_index=NODATAVALUE, label_smoothing=0.025)
     else:
         raise ValueError(
             f"Task type {task_type} is not supported. "
@@ -223,17 +257,17 @@ def main(args):
 
     # Set the optimizer with layer-wise lr decay
     parameters = param_groups_lrd(model)
-    optimizer = AdamW(parameters, lr=1e-4)
+    optimizer = AdamW(parameters, lr=1e-2)
 
     # # Define constant learning rate scheduler for the first few epochs
     # constant_lr_scheduler = lr_scheduler.ConstantLR(
     #     optimizer, factor=1.0, total_iters=unfreeze_epoch
     # )
 
-    # # Define decay scheduler for the rest of the training
+    # Define decay scheduler for the rest of the training
     # decay_scheduler = lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
 
-    # # Make a scheduler that first does constant LR, then decay
+    # Make a scheduler that first does constant LR, then decay
     # scheduler = lr_scheduler.SequentialLR(
     #     optimizer,
     #     schedulers=[constant_lr_scheduler, decay_scheduler],
@@ -338,7 +372,7 @@ def main(args):
     plt.savefig(str(Path(output_dir) / f"CM_{experiment_name}_norm.png"))
     plt.close()
 
-    eval_results.round(2).to_csv(
+    eval_results.to_csv(
         Path(output_dir) / f"results_{experiment_name}.csv", index=False
     )
     logger.info("Evaluation results:")
@@ -405,7 +439,7 @@ def parse_args(arg_list=None):
 if __name__ == "__main__":
     manual_args = [
         "--experiment_tag",
-        "for-metrics",
+        "new-splits",
         "--timestep_freq",
         "month",
         "--country",

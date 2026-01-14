@@ -8,7 +8,7 @@ import torch
 from prometheo.predictors import NODATAVALUE, Predictors
 
 from worldcereal_cop4geoglam import data
-from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset
+from worldcereal_cop4geoglam.datasets import Cop4GeoLabelledDataset, SensorMaskingConfig
 
 
 def get_class_mappings(country: str = "kenya") -> Dict:
@@ -26,8 +26,8 @@ def get_class_mappings(country: str = "kenya") -> Dict:
     with importlib.resources.as_file(file_path) as actual_file_path:
         if not actual_file_path.exists():
             raise ValueError(
-            f"Class mappings file `{file_path}` for country `{country}` does not exist."
-        )
+                f"Class mappings file `{file_path}` for country `{country}` does not exist."
+            )
     with file_path.open("r") as f:
         CLASS_MAPPINGS = json.load(f)
 
@@ -45,8 +45,7 @@ def prepare_training_datasets(
     task_type: Literal["binary", "multiclass"] = "binary",
     num_outputs: int = 1,
     classes_list: Optional[List[str]] = None,
-    # masking_strategy_train: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
-    # masking_strategy_val: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
+    masking_config_train: Optional[SensorMaskingConfig] = None,
     label_jitter: int = 0,
     label_window: int = 0,
 ) -> Tuple[Cop4GeoLabelledDataset, Cop4GeoLabelledDataset, Cop4GeoLabelledDataset]:
@@ -77,10 +76,8 @@ def prepare_training_datasets(
         Number of output classes.
     classes_list : Optional[List[str]], default=None
         List of class names. If None, an empty list is used. Required for multiclass task.
-    masking_strategy_train : MaskingStrategy, default=askingMode.NONE
-        Masking strategy for training dataset.
-    masking_strategy_val : MaskingStrategy, default=MaskingMode.NONE
-        Masking strategy for validation and test datasets.
+    masking_config_train: Optional[SensorMaskingConfig] = None,
+        Configuration for sensor masking during training. If None, no masking is applied.
     label_jitter : int, default=0
         Jittering true position of label(s). If 0, no jittering is applied.
     label_window : int, default=0
@@ -100,7 +97,7 @@ def prepare_training_datasets(
         time_explicit=time_explicit,
         classes_list=classes_list if classes_list is not None else [],
         augment=augment,
-        # masking_strategy=masking_strategy_train,
+        masking_config=masking_config_train,
         label_jitter=label_jitter,
         label_window=label_window,
     )
@@ -357,7 +354,7 @@ def evaluate_finetuned_model(
         labels=classes_to_use if test_ds.task_type == "binary" else None,
     )
 
-    results_df = pd.DataFrame(results).transpose().reset_index()
+    results_df = pd.DataFrame(results).transpose().reset_index().round(2)
     results_df.columns = pd.Index(
         ["class", "precision", "recall", "f1-score", "support"]
     )

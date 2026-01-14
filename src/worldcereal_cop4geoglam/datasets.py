@@ -6,34 +6,15 @@ import numpy as np
 import pandas as pd
 from loguru import logger
 from prometheo.predictors import (
-    DEM_BANDS,
-    METEO_BANDS,
     NODATAVALUE,
-    S1_BANDS,
-    S2_BANDS,
     Predictors,
 )
 from torch.utils.data import WeightedRandomSampler
-from worldcereal.train.datasets import WorldCerealDataset, get_class_weights
-
-
-class MaskingMode(str, Enum):
-    NONE = "none"
-    FIXED = "fixed"
-    RANDOM = "random"
-
-
-@dataclass
-class MaskingStrategy:
-    mode: MaskingMode
-    from_position: Optional[int] = None
-
-    def __post_init__(self):
-        if (
-            self.mode in {MaskingMode.FIXED, MaskingMode.RANDOM}
-            and self.from_position is None
-        ):
-            raise ValueError(f"'from_position' must be set for mode={self.mode}")
+from worldcereal.train.datasets import (
+    SensorMaskingConfig,
+    WorldCerealDataset,
+    get_class_weights,
+)
 
 
 class Cop4GeoDataset(WorldCerealDataset):
@@ -45,7 +26,7 @@ class Cop4GeoDataset(WorldCerealDataset):
         task_type: Literal["ssl", "binary", "multiclass"] = "ssl",
         num_outputs: Optional[int] = None,
         augment: bool = False,
-        # masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
+        masking_config: Optional[SensorMaskingConfig] = None,
     ):
         """WorldCereal base dataset. This dataset is typically used for
         self-supervised learning.
@@ -65,101 +46,18 @@ class Cop4GeoDataset(WorldCerealDataset):
             the value of this parameter is ignored.
         augment : bool, optional
             whether to augment the data, by default False
-        masking_strategy: MaskingStrategy, optional
-            masking strategy to use, by default MaskingMode.NONE.
-            If set to FIXED or RANDOM, the from_position must be set.
+        masking_config : Optional[SensorMaskingConfig], optional
+            configuration for sensor masking during training, by default None.
         """
 
         super().__init__(
-            dataframe, num_timesteps, timestep_freq, task_type, num_outputs, augment
-        )
-
-        # # masking parameters
-        # self.masking_strategy = masking_strategy
-
-        # if masking_strategy.mode == MaskingMode.FIXED:
-        #     logger.info(
-        #         f"masking enabled: masking from position {masking_strategy.from_position}"
-        #     )
-        # if masking_strategy.mode == MaskingMode.RANDOM:
-        #     logger.info(
-        #         f"Random mask position enabled: will randomly mask from positions {masking_strategy.from_position} to {num_timesteps - 1}"
-        #     )
-
-    # @staticmethod
-    # def sample_mask_position(min_pos: int, max_pos: int, alpha=1.5, beta=2.5):
-    #     """Samples from a Beta distribution skewed toward 0
-    #     alpha < beta → skew left (early cutoffs)
-    #     alpha = beta = 1 → uniform
-    #     alpha > beta → skew right (late cutoffs — not what we want)
-    #     """
-    #     r = np.random.beta(alpha, beta)
-    #     scaled = int(min_pos + r * (max_pos - min_pos))
-    #     return min(max(scaled, min_pos), max_pos)
-
-    def get_inputs(self, row_d: Dict, timestep_positions: List[int]) -> dict:
-        # Get latlons
-        latlon = np.reshape(
-            np.array([row_d["lat"], row_d["lon"]], dtype=np.float32), (1, 1, 2)
-        )
-
-        # Get timestamps belonging to each timestep
-        timestamps = self._get_timestamps(row_d, timestep_positions)
-
-        # Initialize inputs
-        s1, s2, meteo, dem = self.initialize_inputs()
-
-        # # Determine masking position for this sample
-        # if self.masking_strategy.mode == MaskingMode.FIXED:
-        #     mask_pos = self.masking_strategy.from_position
-        # elif self.masking_strategy.mode == MaskingMode.RANDOM:
-        #     # Random mask position
-        #     assert self.masking_strategy.from_position is not None
-        #     max_pos = min(self.num_timesteps - 1, len(timestep_positions) - 1)
-        #     mask_pos = self.sample_mask_position(
-        #         self.masking_strategy.from_position, max_pos + 1
-        #     )
-        # else:
-        #     mask_pos = None
-
-        # Fill inputs
-        for src_attr, dst_atr in self.BAND_MAPPING.items():
-            keys = [src_attr.format(t) for t in timestep_positions]
-            values = np.array([float(row_d[key]) for key in keys], dtype=np.float32)
-            idx_valid = values != NODATAVALUE
-
-            # if mask_pos is not None:
-            #     # Create in-range mask for positions >= mask_pos
-            #     in_range_mask = np.arange(self.num_timesteps) >= mask_pos
-
-            #     # Apply the  mask
-            #     values[in_range_mask] = NODATAVALUE
-
-            #     # Update valid indices based on the combined mask
-            #     idx_valid = idx_valid & ~in_range_mask
-
-            if dst_atr in S2_BANDS:
-                s2[..., S2_BANDS.index(dst_atr)] = values
-            elif dst_atr in S1_BANDS:
-                # convert to dB
-                idx_valid = idx_valid & (values > 0)
-                values[idx_valid] = 20 * np.log10(values[idx_valid]) - 83
-                s1[..., S1_BANDS.index(dst_atr)] = values
-            elif dst_atr == "precipitation":
-                # scaling, and AgERA5 is in mm, prometheo convention expects m
-                values[idx_valid] = values[idx_valid] / (100 * 1000.0)
-                meteo[..., METEO_BANDS.index(dst_atr)] = values
-            elif dst_atr == "temperature":
-                # remove scaling
-                values[idx_valid] = values[idx_valid] / 100
-                meteo[..., METEO_BANDS.index(dst_atr)] = values
-            elif dst_atr in DEM_BANDS:
-                values = values[0]  # dem is not temporal
-                dem[..., DEM_BANDS.index(dst_atr)] = values
-            else:
-                raise ValueError(f"Unknown band {dst_atr}")
-        return dict(
-            s1=s1, s2=s2, meteo=meteo, dem=dem, latlon=latlon, timestamps=timestamps
+            dataframe,
+            num_timesteps,
+            timestep_freq,
+            task_type,
+            num_outputs,
+            augment,
+            masking_config=masking_config,
         )
 
 
@@ -172,7 +70,7 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
         classes_list: Union[np.ndarray, List[str]] = [],
         time_explicit: bool = False,
         augment: bool = False,
-        # masking_strategy: MaskingStrategy = MaskingStrategy(MaskingMode.NONE),
+        masking_config: Optional[SensorMaskingConfig] = None,
         label_jitter: int = 0,  # ± timesteps to jitter true label pos, for time_explicit only
         label_window: int = 0,  # ± timesteps to expand around label pos (true or moved), for time_explicit only
         return_sample_id: bool = False,
@@ -191,8 +89,8 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
         time_explicit : bool, optional
             if True, labels respect the full temporal dimension
             to have temporally explicit outputs, by default False
-        masking_strategy: MaskingStrategy, optional
-            masking strategy to use, by default MaskingMode.NONE.
+        masking_config : Optional[SensorMaskingConfig], optional
+            configuration for sensor masking during training, by default None.
         label_jitter : int, optional
             ± timesteps to jitter true label pos, for time_explicit only, by default 0.
             Only used if `time_explicit` is True.
@@ -210,7 +108,7 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             task_type=task_type,
             num_outputs=num_outputs,
             augment=augment,
-            # masking_strategy=masking_strategy,
+            masking_config=masking_config,
             **kwargs,
         )
         self.classes_list = classes_list
@@ -329,9 +227,9 @@ class Cop4GeoLabelledDataset(Cop4GeoDataset):
             else:
                 # apply jitter
                 # scalar valid_position must be an int here
-                assert isinstance(
-                    valid_position, int
-                ), f"Expected single int valid_position, got {type(valid_position)}"
+                assert isinstance(valid_position, int), (
+                    f"Expected single int valid_position, got {type(valid_position)}"
+                )
                 p = valid_position
                 if self.label_jitter > 0:
                     shift = np.random.randint(-self.label_jitter, self.label_jitter + 1)
