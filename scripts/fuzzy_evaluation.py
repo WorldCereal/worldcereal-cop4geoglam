@@ -227,7 +227,7 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
 
     F1 = getF1_threshold(predictions,class_list,threshold=threshold)
 
-    cm = confusion_matrix(test["target_class"], test["predicted_class"], labels=test["target_class"].unique())
+    cm = confusion_matrix(test["target_class"], test["predicted_class"], labels=test["predicted_class"].unique())
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=test["target_class"].unique())
     disp.plot(xticks_rotation='vertical')
     #add title with threshold value
@@ -237,6 +237,8 @@ def createConfusionMatrix_threshold(predictions, output_folder, class_list, thre
     disp.figure_.savefig(os.path.join(output_folder, f'confusion_matrix_thr_{threshold}_run_{run_name}.png'), bbox_inches='tight')
 
 def applyThreshold(nc_file,class_list,output_folder,thresholds,otherValue = "other"):
+
+    os.makedirs(output_folder, exist_ok=True)
 
     if nc_file.split('.')[-1] == 'tif':
         applyThreshold_tif(nc_file,class_list,output_folder,thresholds,otherValue=otherValue)
@@ -289,6 +291,8 @@ def applyThreshold(nc_file,class_list,output_folder,thresholds,otherValue = "oth
 
 def applyThreshold_tif(tif_file,class_list,output_folder,thresholds,otherValue = "other"):
 
+    output_file = os.path.join(output_folder, os.path.basename(tif_file).replace('.tif', f'_thr{thresholds}_classified.tif'))
+
     #Load the tif file
     with rasterio.open(tif_file) as src:
         data = src.read()
@@ -327,7 +331,7 @@ def applyThreshold_tif(tif_file,class_list,output_folder,thresholds,otherValue =
     int_array = np.where(no_crop_mask, -9999, int_array)
 
     # Define the output file name
-    output_file = os.path.join(output_folder, os.path.basename(tif_file).replace('.tif', f'_thr{thresholds[0]}_classified.tif'))
+    output_file = os.path.join(output_folder, os.path.basename(tif_file).replace('.tif', f'_thr{thresholds}_classified.tif'))
 
     # Update the profile with the correct nodata value
     profile.update(
@@ -355,13 +359,15 @@ if __name__ == "__main__":
 
     main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/"
 
-    nc_folder = os.path.join(main_folder,"production","test_croptype_20k_blocks_memberships","raw")
+    production = 'v1_croptype'
+
+    nc_folder = os.path.join(main_folder,"production",production,"raw")
     folder = os.path.join(main_folder,"fuzzy_test")
     os.makedirs(folder, exist_ok=True)
 
-    #pred_file = glob.glob(os.path.join(folder, 'predictions_presto_run=202510151422.parquet'))[0]
+    pred_file = glob.glob(os.path.join(folder, 'predictions_presto_run=202510151422.parquet'))[0]
 
-    #predictions = pd.read_parquet(pred_file)
+    predictions = pd.read_parquet(pred_file)
 
     class_list = [
             "maize",
@@ -369,10 +375,8 @@ if __name__ == "__main__":
             "soybean",
             "sesame",
             "cassava",
-            "cowpea",
             "sweet_potato",
             "pigeon_pea",
-            "sugarcane",
             "other",
             "maizexcassava",
             "cassavaxpigeon_pea",
@@ -385,10 +389,8 @@ if __name__ == "__main__":
             "soybean",
             "sesame",
             "cassava",
-            "cowpea",
             "sweet_potato",
             "pigeon_pea",
-            "sugarcane",
             "other",
         ]
 
@@ -398,12 +400,12 @@ if __name__ == "__main__":
     #average F1 analysis
     #F1_threshold, F1 = determineOptimalThreshold(predictions,class_list,"average_F1",makePlot=True,output_folder=folder)
 
+    F1_threshold = [0.18,0.24,0.16,0.25,0.21,0.15,0.24,0.31]
+
     #Create confusion matrix for the best F1 threshold
-    #createConfusionMatrix_threshold(predictions,folder, class_list, threshold=OA_threshold, run_name = "v3")
+    createConfusionMatrix_threshold(predictions,folder, class_list, threshold=F1_threshold, run_name = "v3")
 
     tif_files = glob.glob(os.path.join(nc_folder,"*",'croptype*.tif'))
 
-    F1_threshold = [0.22,0.1,0.1,0.2,0.1,0.2,0.2,0.2,0.3,0.5]
-
-    for tif_file in tqdm(tif_files,desc="Processing nc files"):
-        applyThreshold(tif_file,class_list,output_folder=folder,thresholds=F1_threshold,otherValue = "other_mix")
+    #for tif_file in tqdm(tif_files,desc="Processing nc files"):
+        #applyThreshold(tif_file,class_list,output_folder=os.path.join(folder,production),thresholds=F1_threshold,otherValue = "other_mix")

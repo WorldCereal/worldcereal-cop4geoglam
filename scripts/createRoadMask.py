@@ -12,7 +12,11 @@ from tqdm import tqdm
 def createRoadsMask(raster_file,roads_file,roads_folder,data=None):
 
         raster_filename = os.path.basename(raster_file)
-        roads_raster_file = os.path.join(roads_folder, raster_filename)
+        roads_raster_file = os.path.join(roads_folder, raster_filename).replace("croptype","cropland")
+        if raster_filename == "croptype_2024-10-01_2025-09-30_2025-09-28_MOZ_1522.tif":
+            print("t")
+
+
         if not os.path.exists(roads_raster_file):
 
             if data is not None:
@@ -77,7 +81,7 @@ def createRoadsMask(raster_file,roads_file,roads_folder,data=None):
 if __name__ == "__main__":
 
     activation = "mozambique"
-    production_name = "v3_landcover"
+    production_name = "v4_landcover"
 
     main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/"
 
@@ -92,11 +96,12 @@ if __name__ == "__main__":
     os.makedirs(buildings_folder, exist_ok=True)
 
     #Rasters
-    raster_folder = os.path.join(act_folder,"production",production_name,"raw","cropland")
-    raster_files = glob.glob(os.path.join(raster_folder,"*.tif"))
+    raster_folder = os.path.join(act_folder,"production",production_name,"raw","*")
+    raster_files = glob.glob(os.path.join(raster_folder,"croptype*.tif"))
 
-    buildings = gpd.read_file(shapefile_buildings)
+    #buildings = gpd.read_file(shapefile_buildings)
+    roads = gpd.read_file(shapefile_roads)
 
     for raster_file in tqdm(raster_files):
-        createRoadsMask(raster_file,shapefile_roads,roads_folder)
-        createRoadsMask(raster_file,shapefile_buildings,buildings_folder,data=buildings)
+        createRoadsMask(raster_file,shapefile_roads,roads_folder,data=roads)
+        #createRoadsMask(raster_file,shapefile_buildings,buildings_folder,data=buildings)
