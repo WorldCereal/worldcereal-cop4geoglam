@@ -106,7 +106,6 @@ def create_worldcereal_cop4geoglam_inferencejob(
     product_type=WorldCerealProductType.CROPTYPE,
     cropland_parameters=None,
     croptype_parameters=None,
-    postprocess_parameters=None,
     s1_orbit_state: Optional[Literal["ASCENDING", "DESCENDING"]] = None,
     target_epsg: Optional[int] = None,
     predict_with_presto: bool = False,
@@ -121,32 +120,35 @@ def create_worldcereal_cop4geoglam_inferencejob(
         product_type=product_type,
         cropland_parameters=cropland_parameters,
         croptype_parameters=croptype_parameters,
-        postprocess_parameters=postprocess_parameters,
         s1_orbit_state=s1_orbit_state,
         target_epsg=target_epsg,
         predict_with_presto=predict_with_presto,
         classes_list=classes_list,
+        connection=connection,
     )
 
     # Submit the job
     job_options = {
         "driver-memory": "2g",
-        "executor-memory": "1g",
-        "executor-memoryOverhead": "2g",
-        "python-memory": "3g",
+        "executor-memory": "2g",
+        "executor-memoryOverhead": "3g",
+        "executor-request-cores": "1800m",
+        "python-memory": "disable",
         "soft-errors": 0.1,
         "image-name": "python311",
-        "max-executors": 10,
+        "max-executors": 20,
         "etl_organization_id": 10523,
         "udf-dependency-archives": [
-            f"{ONNX_DEPS_URL}#onnx_deps",
+            # f"{ONNX_DEPS_URL}#onnx_deps",
             f"{FEATURE_DEPS_URL}#feature_deps",
         ],
     }
 
-    return inference_result.create_job(
+    return connection.create_job(
+        inference_result,
         title=f"WorldCereal Cop4Geoglam inference for {row.tile_name}",
-        job_options=job_options,
+        description="Job that performs end-to-end WorldCereal inference",
+        additional=job_options,
     )
 
 
@@ -189,52 +191,61 @@ def generate_output_path_inference(
 if __name__ == "__main__":
     # ------------------------
     # Flexible parameters
-    country = "mozambique"
+    country = "moldova"
     multiclass = "croptype"  # "croptype" or "landcover"
-    production_run = "v1_croptype"
+    production_run = "V3_13012026"
     output_folder = Path(
         f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/production/{production_run}/raw"
     )
     product_type = WorldCerealProductType.CROPTYPE
-    epsg = 32737
-    parallel_jobs = 25
+    epsg = 32635
+    parallel_jobs = 10
     randomize_production_grid = (
         True  # If True, it will randomly select tiles from the production grid
     )
-    predict_with_presto = True  # If True, it will use presto for croptype prediction
+    predict_with_presto = False  # If True, it will use presto for croptype prediction
     if multiclass == "croptype":
-        classes_list = [
-            "maize",
-            "rice",
-            "soybean",
-            "sesame",
-            "cassava",
-            "cowpea",
-            "sweet_potato",
-            "pigeon_pea",
-            "sugarcane",
-            "other"
-        ] if predict_with_presto else []
+        classes_list = (
+            [
+                "0_maize",
+                "1_wheat",
+                "2_barley",
+                "3_rapeseed",
+                "4_soybean",
+                "5_sunflower",
+                "6_sugarbeet",
+                "7_other_temporary_crops",
+                "8_vineyard",
+                "9_orchard",
+                # "10_other_permanent_crops",  # Dropped due to very low presence
+            ]
+            if predict_with_presto
+            else []
+        )
     elif multiclass == "landcover":
-        classes_list = [
-            "bare_sparsely_vegetated",
-            "built_up",
-            "grasslands",
-            "permanent_crops",
-            "shrublands",
-            "temporary_crops",
-            "trees",
-            "water",
-            "wetlands"
-        ] if predict_with_presto else []
+        classes_list = (
+            [
+                "bare_sparsely_vegetated",
+                "built_up",
+                "grasslands",
+                "permanent_crops",
+                "shrublands",
+                "temporary_crops",
+                "trees",
+                "water",
+                "wetlands",
+            ]
+            if predict_with_presto
+            else []
+        )
     else:
         classes_list = []
 
-    debug = True  # Triggers a selection of tiles
-    start_date = "2024-10-01"
-    end_date = "2025-09-30"
+    debug = False  # Triggers a selection of tiles
+    start_date = "2024-09-01"
+    end_date = "2025-08-31"
     # production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/refdata/MOZ_PSU_UTM.parquet"
-    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/auxdata/zambezia_blocks_20k.parquet"
+    production_grid = f"/vitodata/worldcereal/data/COP4GEOGLAM/{country}/auxdata/{country}_blocks_20k.parquet"
     restart_failed = True  # If True, it will restart failed jobs
     # ------------------------
 
@@ -272,7 +283,7 @@ if __name__ == "__main__":
             # This is just an example selection, adjust as needed
             # selection = ["MOZ_034", "MOZ_025", "MOZ_029", "MOZ_026"]
             # selection = ["MOZ_1420", "MOZ_1528", "MOZ_1536", "MOZ_1254", "MOZ_1569"]
-            selection = ["MOZ_1806", "MOZ_1497", "MOZ_1698", "MOZ_1606"]
+            selection = ["MDA_023", "MDA_090", "MDA_071"]
             production_gdf = production_gdf[production_gdf["tile_name"].isin(selection)]
 
         if randomize_production_grid:
@@ -302,29 +313,27 @@ if __name__ == "__main__":
         compile_presto=False,
     )
 
-    # classifier_parameters_croptype = ClassifierParameters(
-    #     # CatBoost model for croptype classification of the country
-    #     classifier_url=PRODUCTION_MODELS_URLS[country]["catboost"]["croptype"]  # NOQA
-    # )
+    # No postprocessing for the production run as we do this afterwards
+    postprocess_parameters = PostprocessParameters(
+        enable=True,  # True,
+        save_intermediate=True,  # True,  # saves not postprocessed
+    )
 
     # cropland_parameters = CropLandParameters(
     #     feature_parameters=feature_parameters_cropland,
     #     classifier_parameters=classifier_parameters_cropland,
+    #     postprocess_parameters=postprocess_parameters,
     # )
 
     croptype_parameters = CropTypeParameters(
         feature_parameters=feature_parameters_croptype,
-        # classifier_parameters=classifier_parameters_croptype,
+        postprocess_parameters=postprocess_parameters,
+        classifier_url=PRODUCTION_MODELS_URLS[country]["torchhead"]["croptype"],
         # Save resources, no cropland mask needed for the production run
         mask_cropland=False,
         save_mask=False,
     )
 
-    # No postprocessing for the production run as we do this afterwards
-    postprocess_parameters = PostprocessParameters(
-        enable=False,  # True,
-        save_intermediate=False,  # True,  # saves not postprocessed
-    )
     # Retry loop starts here
     attempt = 0
     while True:
@@ -346,7 +355,6 @@ if __name__ == "__main__":
                     product_type=product_type,
                     cropland_parameters=None,  # cropland_parameters,
                     croptype_parameters=croptype_parameters,
-                    postprocess_parameters=postprocess_parameters,
                     target_epsg=epsg,
                     predict_with_presto=predict_with_presto,
                     classes_list=classes_list if predict_with_presto else None,
