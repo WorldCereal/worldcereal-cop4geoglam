@@ -10,7 +10,6 @@ from worldcereal.openeo.preprocessing import worldcereal_preprocessed_inputs
 from worldcereal.parameters import (
     CropLandParameters,
     CropTypeParameters,
-    PostprocessParameters,
     WorldCerealProductType,
 )
 
