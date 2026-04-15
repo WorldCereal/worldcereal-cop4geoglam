@@ -37,6 +37,8 @@ def merge_points_and_polygons(activation, original_point_file, polygon_to_point_
         merged_points = original_points.copy()
         points_to_add = []
 
+        dataset_base_name = original_point_file.split("_harmonized")[0]
+
         #loop over original points, check for SSU_ID
         for i,point_o in original_points.iterrows():
             bar.update(1)
@@ -47,6 +49,7 @@ def merge_points_and_polygons(activation, original_point_file, polygon_to_point_
                 for n, point_n in points_new.iterrows():
                     updated_point = point_o.copy()
                     updated_point['geometry'] = point_n['geometry']
+                    updated_point["sample_id"] = dataset_base_name + "_" + str(point_o_id) + "_" + "poly"+ "_" + str(n)
                     #add the updated point to the original points dataframe
                     #add row to original points dataframe
                     points_to_add.append(updated_point)
