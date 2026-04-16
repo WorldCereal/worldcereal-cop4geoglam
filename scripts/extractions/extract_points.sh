@@ -5,12 +5,12 @@ set -euo pipefail
 export OPENEO_AUTH_METHOD=""
 
 # DIRECTORIES AND REF_ID
-REF_ID="2025_MDA_COPERNICUS4GEOGLAM-SUGARBEET_POINT_110"
-COUNTRY_DIR="/vitodata/worldcereal/data/COP4GEOGLAM/moldova"
+REF_ID="2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_110_harmonized_with_EXP_POINTS_merged"
+COUNTRY_DIR="/vitodata/worldcereal/data/COP4GEOGLAM/mozambique"
 
 # Python and extraction command
-PYTHONPATH="/home/kristofvt//miniconda3/envs/worldcereal/bin/python"
-EXTRACT_CMD="/home/kristofvt/git/worldcereal-classification/scripts/extractions/extract.py"
+PYTHONPATH="/home/koendevos/.conda/envs/worldcereal/bin/python"
+EXTRACT_CMD="/home/koendevos/Private/git/worldcereal-classification/scripts/extractions/extract.py"
 
 # Extraction parameters
 PYTHON_MEMORY="3000m"

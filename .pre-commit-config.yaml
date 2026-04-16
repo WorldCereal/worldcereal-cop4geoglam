@@ -37,6 +37,7 @@ repos:
         entry: shellcheck --check-sourced --shell=bash --exclude=SC1087
         language: system
         types: [shell]
+        files: \.sh$
       # - id: pydocstyle
       #   name: pydocstyle
       #   entry: pydocstyle
