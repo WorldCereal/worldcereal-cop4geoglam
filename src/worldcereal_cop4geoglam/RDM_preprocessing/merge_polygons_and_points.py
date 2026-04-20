@@ -8,7 +8,7 @@ from polygon_to_point import polygon_to_point
 from tqdm import tqdm
 
 
-def merge_points_and_polygons(activation, original_point_file, polygon_to_point_file,overwrite=False):
+def merge_points_and_polygons(activation, original_point_file, polygon_to_point_file, outname = None, overwrite=False):
 
     ## do not change this--
     base_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/"
@@ -17,7 +17,10 @@ def merge_points_and_polygons(activation, original_point_file, polygon_to_point_
     original_ref_data_dir = os.path.join(ref_data_dir,"original")
     harmonized_ref_data_dir = os.path.join(ref_data_dir,"harmonized")
 
-    merged_out = os.path.join(harmonized_ref_data_dir,original_point_file.replace(".parquet","_merged.parquet"))
+    if outname is None:
+        merged_out = os.path.join(harmonized_ref_data_dir,original_point_file.replace(".parquet","_merged.geoparquet"))
+    else:
+        merged_out = os.path.join(harmonized_ref_data_dir,outname)
 
     if not os.path.exists(merged_out) or overwrite:
 
@@ -63,6 +66,12 @@ def merge_points_and_polygons(activation, original_point_file, polygon_to_point_
 
         merged_points = gpd.pd.concat([merged_points, add_points], ignore_index=True)
 
+        merged_points["sampling_ewoc_code"] = merged_points["ewoc_code"]
+        merged_points["h3_l3_cell"]="unspecified"
+        merged_points["irrigation_status"]=0
+        merged_points["quality_score_lc"] = 1
+        merged_points["quality_score_ct"] = 1
+
         #store the merged file in the harmonized folder
         merged_points.to_parquet(merged_out, index=False)
 
@@ -71,4 +80,5 @@ if __name__ == "__main__":
     activation = "mozambique"
     original_point_file = "2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS.parquet"
     polygon_to_point_file = "Polygon_to_points.gpkg"
-    merge_points_and_polygons(activation, original_point_file, polygon_to_point_file)
+    outname = "2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_110_harmonized_with_EXP_POINTS_merged.geoparquet"
+    merge_points_and_polygons(activation, original_point_file, polygon_to_point_file,outname=outname,overwrite=True)
