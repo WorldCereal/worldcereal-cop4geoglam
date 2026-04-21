@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 
-def harmonize_ITC(itc_file_name,output_name,activation = "mozambique",overwrite=False):
+def harmonize_ITC(itc_file_name,output_name,activation = "mozambique_pm",overwrite=False):
 
     ## do not change this--
     base_dir = "/vitodata/worldcereal/data/COP4GEOGLAM/"
@@ -153,16 +153,24 @@ def harmonize_ITC(itc_file_name,output_name,activation = "mozambique",overwrite=
 
         itc_harm = itc_harm[keep_cols]
 
+        merged_points = itc_harm.copy()
+
+        merged_points["sampling_ewoc_code"] = merged_points["ewoc_code"]
+        merged_points["h3_l3_cell"]="unspecified"
+        merged_points["irrigation_status"]=0
+        merged_points["quality_score_lc"] = 1
+        merged_points["quality_score_ct"] = 1
+
         #save the harmonized dataset as a parquet file
-        itc_harm.to_parquet(os.path.join(harmonized_ref_data_dir,output_name), index=False)
+        merged_points.to_parquet(os.path.join(harmonized_ref_data_dir,output_name), index=False)
 
 
 if __name__ == "__main__":
 
     itc_file_name = "itc_fc_crop_point_selection_checked.gpkg"
-    output_name = "2025_MOZ_ITC_POINT_110_harmonized.parquet"
+    output_name = "2025_MOZ_ITC_POINT_110_harmonized.geoparquet"
 
     # Define the path to the input shapefile
     harmonize_ITC(itc_file_name=itc_file_name,
                     output_name=output_name,
-                    activation = "mozambique")
+                    activation = "mozambique_pm")
