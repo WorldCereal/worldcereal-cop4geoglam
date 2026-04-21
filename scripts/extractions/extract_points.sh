@@ -5,8 +5,8 @@ set -euo pipefail
 export OPENEO_AUTH_METHOD=""
 
 # DIRECTORIES AND REF_ID
-REF_ID="2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_110_harmonized_with_EXP_POINTS_merged"
-COUNTRY_DIR="/vitodata/worldcereal/data/COP4GEOGLAM/mozambique"
+REF_ID="2025_MOZ_ITC_POINT_110_harmonized"
+COUNTRY_DIR="/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm"
 
 # Python and extraction command
 PYTHONPATH="/home/koendevos/.conda/envs/worldcereal/bin/python"
@@ -20,7 +20,7 @@ MAX_LOCATIONS="250"
 
 # Build paths
 REFDATA_FILE="${COUNTRY_DIR}/refdata/harmonized/${REF_ID}.geoparquet"
-OUTDIR="${COUNTRY_DIR}/trainingdata/${REF_ID}/"
+OUTDIR="${COUNTRY_DIR}/extractions/${REF_ID}/"
 
 echo
 printf '%0.s-' {1..50}
