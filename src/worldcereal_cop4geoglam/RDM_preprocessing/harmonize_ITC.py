@@ -167,7 +167,7 @@ def harmonize_ITC(itc_file_name,output_name,activation = "mozambique_pm",overwri
 
 if __name__ == "__main__":
 
-    itc_file_name = "itc_fc_crop_point_selection_checked.gpkg"
+    itc_file_name = "ITC_insitu.gpkg"
     output_name = "2025_MOZ_ITC_POINT_110_harmonized.geoparquet"
 
     # Define the path to the input shapefile
