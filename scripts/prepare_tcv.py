@@ -18,7 +18,7 @@ def createSummaryTable(df,group_cols,agg_cols):
 
     return(summary_table)
 
-def identifyDifficultPGP(difficult_percentage = 0.2):
+def identifyDifficultPGP(difficult_percentage = 0.4):
     feature_distance_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/feature_distance"
     pgp_to_maize = pd.read_parquet(os.path.join(feature_distance_folder,"pigeon_pea_distance_to_maize.parquet"))
 
