@@ -4,6 +4,7 @@ import os
 from typing import Any, Dict, cast
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -17,6 +18,14 @@ def createSummaryTable(df,group_cols,agg_cols):
 
     return(summary_table)
 
+def identifyDifficultPGP(difficult_percentage = 0.2):
+    feature_distance_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/feature_distance"
+    pgp_to_maize = pd.read_parquet(os.path.join(feature_distance_folder,"pigeon_pea_distance_to_maize.parquet"))
+
+    threshold = pgp_to_maize["distance_to_maize"].quantile(difficult_percentage)
+    #select the sample_ids of the pigeon pea points that are below this threshold, as these are the ones closest to maize in feature space and thus likely more difficult to classify
+    difficult_pgp_samples = pgp_to_maize[pgp_to_maize["distance_to_maize"] <= threshold]["ssu_id"].unique().tolist()
+    return(difficult_pgp_samples)
 
 def identifySamplesWithTrees(activation,ref_id):
 
@@ -44,7 +53,25 @@ def identifySamplesWithTrees(activation,ref_id):
 
     return tree_samples
 
-def ignoreSamples(tcv_folder,datafile,ignore_samples=[],overwrite=False):
+def identifyMaizeSamples(activation,ref_id):
+    activation_folder = os.path.join("/vitodata/worldcereal/data/COP4GEOGLAM/",activation)
+    original_file = os.path.join(activation_folder,"refdata","harmonized")
+
+    harm_file = os.path.join(original_file,f"{ref_id}.geoparquet")
+
+    if os.path.exists(harm_file):
+        harm_df = pd.read_parquet(harm_file)
+
+        ewoc_maize = 1101060000
+        maize_samples = harm_df[harm_df["ewoc_code"]==ewoc_maize]["sample_id"].unique()
+
+        maize_samples_df = pd.DataFrame(maize_samples, columns=["sample_id"])
+
+        maize_samples = maize_samples_df["sample_id"].tolist()
+
+    return maize_samples
+
+def ignoreSamples(tcv_folder,datafile,ignore_samples=[],overwrite=False,ignoreMaize=False):
     ignore_samples_csv = os.path.join(tcv_folder,f"{ref_id}_ignore_sample_ids.csv")
     if not os.path.exists(ignore_samples_csv) or overwrite:
         #load existing train, test, and val sample_ids
@@ -63,6 +90,11 @@ def ignoreSamples(tcv_folder,datafile,ignore_samples=[],overwrite=False):
 
         matching_sample_ids = set(matching_sample_ids + trees_samples_ids + trees_samples_ids_ITC)
 
+        if ignoreMaize:
+            maize_samples_ids = identifyMaizeSamples(activation,"2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_harmonized_with_EXP_POINTS_POLY")
+            matching_sample_ids = set(list(matching_sample_ids) + maize_samples_ids)
+
+
         #save the matching sample ids to a csv file
         pd.DataFrame(matching_sample_ids, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{ref_id}_ignore_sample_ids.csv"), index=False)
         ignore_ids = matching_sample_ids
@@ -71,8 +103,7 @@ def ignoreSamples(tcv_folder,datafile,ignore_samples=[],overwrite=False):
 
     return ignore_ids
 
-
-def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,overwrite=False,ignore_samples = []):
+def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,overwrite=False,ignore_samples = [],ignoreMaize=False,removePGP_percentage=0.4):
 
     activation_folder = os.path.join("/vitodata/worldcereal/data/COP4GEOGLAM/",activation)
     trainingdata_folder = os.path.join(activation_folder,"trainingdata")
@@ -95,18 +126,29 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         C4G_points["ssu_id"] = C4G_points["sample_id"].str.split("_").str[5] + "_" + C4G_points["sample_id"].str.split("_").str[6]
 
         merged_gdf = gpd.GeoDataFrame(pd.concat([ITC_points,C4G_points], ignore_index=True))
+        all_samples = merged_gdf["sample_id"].unique().tolist()
 
         ITC_lookup_path = os.path.join(activation_folder,"refdata","harmonized","lookup","2025_MOZ_ITC_POINT_110_harmonized_lookup.parquet")
         ITC_lookup = pd.read_parquet(ITC_lookup_path)
 
         #add cropping pattern info to ITC_points from ITC_lookup based on sample_id
-        ITC_points = ITC_points.merge(ITC_lookup[["sample_id","cropping_pattern",'trees_in_cropfield']], on="sample_id", how="left")
+        ITC_points = ITC_points.merge(ITC_lookup[["sample_id","cropping_pattern",'trees_in_cropfield',"dominant_crop","dominant_percentage"]], on="sample_id", how="left")
 
         ITC_points = ITC_points[ITC_points["trees_in_cropfield"]!="trees_yes"]
 
         #only monocropping
         ITC_mono = ITC_points[ITC_points["cropping_pattern"] == "mono_culture"]
         merged_mono = gpd.GeoDataFrame(pd.concat([ITC_mono,C4G_points], ignore_index=True))
+
+        if ignoreMaize:
+            ITC_maize = ITC_points[ITC_points["dominant_crop"].str.contains("maize", case=False, na=False)]
+            #select on dominant crop percentage being larger than 80%
+            ITC_maize = ITC_maize[ITC_maize["dominant_percentage"] >= 80]
+            #set ewoc_code to 1101060000 for these samples
+            ITC_maize["ewoc_code"] = 1101060000
+            ITC_maize["cropping_pattern"] = "mono_culture"
+            #add these points to the merged_mono dataframe
+            merged_mono = gpd.GeoDataFrame(pd.concat([merged_mono,ITC_maize], ignore_index=True))
 
         class_mappings_path = os.path.join(activation_folder, "class_mappings_mozambique.json")
 
@@ -125,7 +167,7 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         merged_mono["landcover"] = merged_mono["ewoc_code"].map(landcover_mapping)
         merged_mono["croptype"] = merged_mono["ewoc_code"].map(croptype_mapping)
 
-        ignore_samples = ignoreSamples(tcv_folder,merged_mono,ignore_samples=ignore_samples,overwrite=overwrite)
+        ignore_samples = ignoreSamples(tcv_folder,merged_mono,ignore_samples=ignore_samples,overwrite=overwrite,ignoreMaize=ignoreMaize)
         #remove sample_id's that are in the ignore_samples list
         merged_mono = merged_mono[~merged_mono["sample_id"].isin(ignore_samples)]
 
@@ -145,17 +187,58 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         train_val_df = merged_mono_ssu[merged_mono_ssu["ssu_id"].isin(train_val_ssu_ids)]
         train_ssu, val_ssu = train_test_split(train_val_df[["ssu_id","ewoc_code","finetune_class"]], test_size=cal_size/(1-test_size), random_state=random_state, stratify=train_val_df["finetune_class"])
 
+        if removePGP_percentage > 0:
+            difficultPGP = identifyDifficultPGP(difficult_percentage=0.2)
+            dPGP_SSU = set(difficultPGP)
 
         merged_mono["finetune_class"] = merged_mono["croptype"]
         merged_mono["finetune_class"] = merged_mono["finetune_class"].fillna(merged_mono["landcover"])
 
-        train_df = merged_mono[merged_mono["ssu_id"].isin(train_ssu["ssu_id"])]
-        val_df = merged_mono[merged_mono["ssu_id"].isin(val_ssu["ssu_id"])]
-        test_df = merged_mono[merged_mono["ssu_id"].isin(test_ssu["ssu_id"])]
+        train_df = merged_mono[merged_mono["ssu_id"].isin(train_ssu["ssu_id"])].copy()
+        val_df = merged_mono[merged_mono["ssu_id"].isin(val_ssu["ssu_id"])].copy()
+        test_df = merged_mono[merged_mono["ssu_id"].isin(test_ssu["ssu_id"])].copy()
+
+        # ---------------------------------------------------------------------
+        # Move difficult PGP SSUs from train into val and test, equally split
+        # ---------------------------------------------------------------------
+
+        # Difficult SSUs that are actually present in the current training split
+        if removePGP_percentage > 0:
+            dpgp_in_train = np.array(
+                train_df.loc[train_df["ssu_id"].isin(dPGP_SSU), "ssu_id"].drop_duplicates()
+            )
+
+            if len(dpgp_in_train) > 0:
+                rng = np.random.default_rng(random_state)
+                rng.shuffle(dpgp_in_train)
+
+                # Split difficult SSUs approximately 50/50 between val and test
+                half = len(dpgp_in_train) // 2
+
+                dpgp_to_val = set(dpgp_in_train[:half])
+                dpgp_to_test = set(dpgp_in_train[half:])
+
+                # Select rows to move
+                move_to_val_df = train_df[train_df["ssu_id"].isin(dpgp_to_val)].copy()
+                move_to_test_df = train_df[train_df["ssu_id"].isin(dpgp_to_test)].copy()
+
+                # Remove these SSUs from train
+                train_df = train_df[
+                    ~train_df["ssu_id"].isin(dpgp_to_val | dpgp_to_test)
+                ].copy()
+
+                # Add them to val and test
+                val_df = pd.concat([val_df, move_to_val_df], ignore_index=True)
+                test_df = pd.concat([test_df, move_to_test_df], ignore_index=True)
 
         train_sample_id = train_df["sample_id"].unique()
         val_sample_id = val_df["sample_id"].unique()
         test_sample_id = test_df["sample_id"].unique()
+
+        removed_samples = set(all_samples) - set(train_sample_id) - set(val_sample_id) - set(test_sample_id)
+        #write to ignore samples csv file
+        ignore_samples_df = pd.DataFrame(list(removed_samples), columns=["sample_id"])
+        ignore_samples_df.to_csv(os.path.join(tcv_folder,f"{ref_id}_ignore_sample_ids.csv"), index=False)
 
         train_df.to_parquet(os.path.join(tcv_folder,f"{ref_id}_train.parquet"), index=False)
         val_df.to_parquet(os.path.join(tcv_folder,f"{ref_id}_val.parquet"), index=False)
@@ -215,4 +298,10 @@ if __name__ == "__main__":
         "361380_41"
     ]
 
-    makeSplit(activation,ref_id,test_size=test_size,cal_size=cal_size,overwrite=True,ignore_samples = ignore_samples)
+    overwrite = True
+    ignoreMaize = True
+    removePGP_percentage = 0.4
+
+    makeSplit(activation,ref_id,test_size=test_size,cal_size=cal_size,
+              overwrite=overwrite,ignore_samples = ignore_samples,ignoreMaize=ignoreMaize,
+              removePGP_percentage=removePGP_percentage)
