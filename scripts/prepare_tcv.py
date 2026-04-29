@@ -71,8 +71,8 @@ def identifyMaizeSamples(activation,ref_id):
 
     return maize_samples
 
-def ignoreSamples(tcv_folder,datafile,ignore_samples=[],overwrite=False,ignoreMaize=False):
-    ignore_samples_csv = os.path.join(tcv_folder,f"{ref_id}_ignore_sample_ids.csv")
+def ignoreSamples(tcv_folder,run_prefix,datafile,ignore_samples=[],overwrite=False,ignoreMaize=False):
+    ignore_samples_csv = os.path.join(tcv_folder,f"{run_prefix}_ignore_sample_ids.csv")
     if not os.path.exists(ignore_samples_csv) or overwrite:
         #load existing train, test, and val sample_ids
 
@@ -103,7 +103,8 @@ def ignoreSamples(tcv_folder,datafile,ignore_samples=[],overwrite=False,ignoreMa
 
     return ignore_ids
 
-def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,overwrite=False,ignore_samples = [],ignoreMaize=False,removePGP_percentage=0.4):
+def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,overwrite=False,ignore_samples = [],ignoreMaize=False,removePGP_percentage=0.4,
+              addPGP_to_ignore=False,output_name=None):
 
     activation_folder = os.path.join("/vitodata/worldcereal/data/COP4GEOGLAM/",activation)
     trainingdata_folder = os.path.join(activation_folder,"trainingdata")
@@ -114,6 +115,12 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         os.chmod(tcv_folder, 0o777)
 
     train_out = os.path.join(tcv_folder,f"{ref_id}_train.parquet")
+    if output_name is not None:
+        train_out = train_out.replace(ref_id,output_name)
+
+    run_prefix = ref_id
+    if output_name is not None:
+        run_prefix = output_name
 
     if not os.path.exists(train_out) or overwrite:
 
@@ -167,7 +174,7 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         merged_mono["landcover"] = merged_mono["ewoc_code"].map(landcover_mapping)
         merged_mono["croptype"] = merged_mono["ewoc_code"].map(croptype_mapping)
 
-        ignore_samples = ignoreSamples(tcv_folder,merged_mono,ignore_samples=ignore_samples,overwrite=overwrite,ignoreMaize=ignoreMaize)
+        ignore_samples = ignoreSamples(tcv_folder,run_prefix,merged_mono,ignore_samples=ignore_samples,overwrite=overwrite,ignoreMaize=ignoreMaize)
         #remove sample_id's that are in the ignore_samples list
         merged_mono = merged_mono[~merged_mono["sample_id"].isin(ignore_samples)]
 
@@ -188,7 +195,7 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         train_ssu, val_ssu = train_test_split(train_val_df[["ssu_id","ewoc_code","finetune_class"]], test_size=cal_size/(1-test_size), random_state=random_state, stratify=train_val_df["finetune_class"])
 
         if removePGP_percentage > 0:
-            difficultPGP = identifyDifficultPGP(difficult_percentage=0.2)
+            difficultPGP = identifyDifficultPGP(difficult_percentage=removePGP_percentage)
             dPGP_SSU = set(difficultPGP)
 
         merged_mono["finetune_class"] = merged_mono["croptype"]
@@ -227,9 +234,16 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
                     ~train_df["ssu_id"].isin(dpgp_to_val | dpgp_to_test)
                 ].copy()
 
-                # Add them to val and test
-                val_df = pd.concat([val_df, move_to_val_df], ignore_index=True)
-                test_df = pd.concat([test_df, move_to_test_df], ignore_index=True)
+                if addPGP_to_ignore:
+                    # Add the difficult PGP SSUs to the ignore list
+                    new_ignore_samples = set(move_to_val_df["sample_id"].unique()) | set(move_to_test_df["sample_id"].unique())
+                    ignore_samples = set(ignore_samples) | new_ignore_samples
+
+                else:
+
+                    # Add them to val and test
+                    val_df = pd.concat([val_df, move_to_val_df], ignore_index=True)
+                    test_df = pd.concat([test_df, move_to_test_df], ignore_index=True)
 
         train_sample_id = train_df["sample_id"].unique()
         val_sample_id = val_df["sample_id"].unique()
@@ -238,33 +252,33 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         removed_samples = set(all_samples) - set(train_sample_id) - set(val_sample_id) - set(test_sample_id)
         #write to ignore samples csv file
         ignore_samples_df = pd.DataFrame(list(removed_samples), columns=["sample_id"])
-        ignore_samples_df.to_csv(os.path.join(tcv_folder,f"{ref_id}_ignore_sample_ids.csv"), index=False)
+        ignore_samples_df.to_csv(os.path.join(tcv_folder,f"{run_prefix}_ignore_sample_ids.csv"), index=False)
 
-        train_df.to_parquet(os.path.join(tcv_folder,f"{ref_id}_train.parquet"), index=False)
-        val_df.to_parquet(os.path.join(tcv_folder,f"{ref_id}_val.parquet"), index=False)
-        test_df.to_parquet(os.path.join(tcv_folder,f"{ref_id}_test.parquet"), index=False)
+        train_df.to_parquet(os.path.join(tcv_folder,f"{run_prefix}_train.parquet"), index=False)
+        val_df.to_parquet(os.path.join(tcv_folder,f"{run_prefix}_val.parquet"), index=False)
+        test_df.to_parquet(os.path.join(tcv_folder,f"{run_prefix}_test.parquet"), index=False)
 
         #save the sample ids in separate csv files
-        pd.DataFrame(train_sample_id, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{ref_id}_train_sample_ids.csv"), index=False)
-        pd.DataFrame(val_sample_id, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{ref_id}_val_sample_ids.csv"), index=False)
-        pd.DataFrame(test_sample_id, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{ref_id}_test_sample_ids.csv"), index=False)
+        pd.DataFrame(train_sample_id, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{run_prefix}_train_sample_ids.csv"), index=False)
+        pd.DataFrame(val_sample_id, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{run_prefix}_val_sample_ids.csv"), index=False)
+        pd.DataFrame(test_sample_id, columns=["sample_id"]).to_csv(os.path.join(tcv_folder,f"{run_prefix}_test_sample_ids.csv"), index=False)
 
         #create summary tables for train, val and test splits
         summary_train = createSummaryTable(train_df,group_cols=["landcover","croptype","source_file"],agg_cols=["sample_id","ssu_id"])
         summary_val = createSummaryTable(val_df,group_cols=["landcover","croptype","source_file"],agg_cols=["sample_id","ssu_id"])
         summary_test = createSummaryTable(test_df,group_cols=["landcover","croptype","source_file"],agg_cols=["sample_id","ssu_id"])
 
-        summary_train.to_csv(os.path.join(tcv_folder,f"{ref_id}_train_summary.txt"), index=False, sep="\t")
-        summary_val.to_csv(os.path.join(tcv_folder,f"{ref_id}_val_summary.txt"), index=False, sep="\t")
-        summary_test.to_csv(os.path.join(tcv_folder,f"{ref_id}_test_summary.txt"), index=False, sep="\t")
+        summary_train.to_csv(os.path.join(tcv_folder,f"{run_prefix}_train_summary.txt"), index=False, sep="\t")
+        summary_val.to_csv(os.path.join(tcv_folder,f"{run_prefix}_val_summary.txt"), index=False, sep="\t")
+        summary_test.to_csv(os.path.join(tcv_folder,f"{run_prefix}_test_summary.txt"), index=False, sep="\t")
 
 if __name__ == "__main__":
 
     activation = "mozambique_pm"
     ref_id = "2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED"
 
-    cal_size = 0.15
-    test_size = 0.15
+    cal_size = 0.1
+    test_size = 0.2
 
     ignore_samples = [
         "253659_35_EXP_16357",
@@ -301,7 +315,10 @@ if __name__ == "__main__":
     overwrite = True
     ignoreMaize = True
     removePGP_percentage = 0.4
+    addPGP_to_ignore = True
+    output_name = ref_id + "_PGP_remove"
 
     makeSplit(activation,ref_id,test_size=test_size,cal_size=cal_size,
               overwrite=overwrite,ignore_samples = ignore_samples,ignoreMaize=ignoreMaize,
-              removePGP_percentage=removePGP_percentage)
+              removePGP_percentage=removePGP_percentage,addPGP_to_ignore=addPGP_to_ignore,
+              output_name=output_name)
