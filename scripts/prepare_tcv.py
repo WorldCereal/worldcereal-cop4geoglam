@@ -18,7 +18,7 @@ def createSummaryTable(df,group_cols,agg_cols):
 
     return(summary_table)
 
-def identifyDifficultPGP(difficult_percentage = 0.4):
+def identifyDifficultPGP(difficult_percentage = 0.6):
     feature_distance_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/feature_distance"
     pgp_to_maize = pd.read_parquet(os.path.join(feature_distance_folder,"pigeon_pea_distance_to_maize.parquet"))
 
@@ -274,51 +274,57 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
 
 if __name__ == "__main__":
 
-    activation = "mozambique_pm"
-    ref_id = "2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED"
+    remove_percentages = [40,45,50,55,60]
 
-    cal_size = 0.1
-    test_size = 0.2
+    for remove_percentage in remove_percentages:
 
-    ignore_samples = [
-        "253659_35_EXP_16357",
-        "253659_43_EXP_16381",
-        "253659_51_EXP_16408",
-        "253659_53",
-        "261126_21",
-        "336406_15_EXP_22368",
-        "12959_32_EXP_3447",
-        "237888_25_EXP_38014",
-        "237888_33",
-        "261126_32_EXP_63396",
-        "324810_13_EXP_42487",
-        "34547_15_EXP_23121",
-        "34547_15_EXP_23128",
-        "34547_15_EXP_23124",
-        "34517_34_EXP_23198",
-        "34517_34_EXP_23194",
-        "34517_34_EXP_23199",
-        "34517_34_EXP_23196",
-        "34517_44",
-        "34517_45",
-        "361380_13_EXP_44846",
-        "361380_13_EXP_44842",
-        "361380_13_EXP_44847",
-        "361380_13_EXP_44844",
-        "361380_13_EXP_44848",
-        "361380_14",
-        "361380_15",
-        "361380_21",
-        "361380_41"
-    ]
+        print(f"Running split with removePGP_percentage={remove_percentage}...")
 
-    overwrite = True
-    ignoreMaize = True
-    removePGP_percentage = 0.4
-    addPGP_to_ignore = True
-    output_name = ref_id + "_PGP_remove"
+        activation = "mozambique_pm"
+        ref_id = "2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED"
 
-    makeSplit(activation,ref_id,test_size=test_size,cal_size=cal_size,
-              overwrite=overwrite,ignore_samples = ignore_samples,ignoreMaize=ignoreMaize,
-              removePGP_percentage=removePGP_percentage,addPGP_to_ignore=addPGP_to_ignore,
-              output_name=output_name)
+        cal_size = 0.1
+        test_size = 0.2
+
+        ignore_samples = [
+            "253659_35_EXP_16357",
+            "253659_43_EXP_16381",
+            "253659_51_EXP_16408",
+            "253659_53",
+            "261126_21",
+            "336406_15_EXP_22368",
+            "12959_32_EXP_3447",
+            "237888_25_EXP_38014",
+            "237888_33",
+            "261126_32_EXP_63396",
+            "324810_13_EXP_42487",
+            "34547_15_EXP_23121",
+            "34547_15_EXP_23128",
+            "34547_15_EXP_23124",
+            "34517_34_EXP_23198",
+            "34517_34_EXP_23194",
+            "34517_34_EXP_23199",
+            "34517_34_EXP_23196",
+            "34517_44",
+            "34517_45",
+            "361380_13_EXP_44846",
+            "361380_13_EXP_44842",
+            "361380_13_EXP_44847",
+            "361380_13_EXP_44844",
+            "361380_13_EXP_44848",
+            "361380_14",
+            "361380_15",
+            "361380_21",
+            "361380_41"
+        ]
+
+        overwrite = True
+        ignoreMaize = True
+        removePGP_percentage = remove_percentage/100
+        addPGP_to_ignore = True
+        output_name = ref_id + f"_PGP_remove_{str(remove_percentage)}"
+
+        makeSplit(activation,ref_id,test_size=test_size,cal_size=cal_size,
+                overwrite=overwrite,ignore_samples = ignore_samples,ignoreMaize=ignoreMaize,
+                removePGP_percentage=removePGP_percentage,addPGP_to_ignore=addPGP_to_ignore,
+                output_name=output_name)

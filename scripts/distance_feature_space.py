@@ -11,7 +11,12 @@ for col in df.columns:
         if col.startswith(prefix):
             pc_cols.append(col)
 
+#normalize the pc columns
+df[pc_cols] = df[pc_cols].replace(65535, pd.NA)  # Replace 65535 with NA
+df[pc_cols] = df[pc_cols].apply(lambda x: (x - x.min()) / (x.max() - x.min()))
+
 maize_points = df[df["ewoc_code"] == 1101060000]
+maize_points = maize_points[maize_points["year"]==2025]
 maize_points[maize_points == 65535] = pd.NA
 
 pigeon_pea_points = df[df["ewoc_code"] == 1105010060]
