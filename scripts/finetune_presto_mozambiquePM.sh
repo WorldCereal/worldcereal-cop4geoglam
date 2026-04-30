@@ -38,7 +38,7 @@ ARGS=(
 
     # One or more parquet files with extracted time-series samples.
     # Omit to use the default global extraction list (requires VPN / cluster access).
-    --parquet_files "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240901-20250831.parquet"
+    --parquet_files "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240701-20251031_NO-EXP.parquet"
 
     # Temporal resolution of the input data.
     #   "month"  → 12 timesteps / year  (default, most common)
@@ -49,14 +49,14 @@ ARGS=(
     # "auto" (default) keeps all timesteps present in the data.
     # Set an integer to hard-cap the window (e.g. 18 for a 1.5-year window;
     # also enables temporal augmentation when --augment is set).
-    --max_timesteps_trim 12
+    --max_timesteps_trim 16
 
     # Optional: CSV files that pin specific sample IDs to val / test / ignore.
     # Each CSV must contain a "sample_id" column.
     # When omitted, a random stratified 70/15/15 split is used.
-    --val_samples_file     "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_val_sample_ids.csv"
-    --test_samples_file    "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_test_sample_ids.csv"
-    --ignore_samples_file  "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_ignore_sample_ids.csv"
+    --val_samples_file     "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_60_val_sample_ids.csv"
+    --test_samples_file    "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_60_val_sample_ids.csv"
+    --ignore_samples_file  "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_60_val_sample_ids.csv"
 
     # Optional: path to the intermediate wide-format parquet (the expensive pivot/merge
     # step output). If the file already exists it is reused, skipping data preparation.
@@ -77,7 +77,7 @@ ARGS=(
 
     # Key inside the mappings JSON for the landcover head.
     # Default: LANDCOVER10
-    --landcover_classes_key "LANDCOVER10"
+    --landcover_classes_key "CROPLAND2"
 
     # Key inside the mappings JSON for the crop-type head.
     # Common value: CROPTYPE24
@@ -85,7 +85,7 @@ ARGS=(
 
     # Mapping key used when assigning initial ewoc_code → label during data prep.
     # Usually matches --landcover_classes_key.
-    --initial_mapping "LANDCOVER10"
+    --initial_mapping "CROPLAND2"
 
     # Comma-separated landcover labels treated as "cropland" for the binary
     # cropland gate inside the crop-type head. Optionally include perennial
@@ -94,7 +94,7 @@ ARGS=(
 
     # Classes with fewer training samples than this threshold are dropped
     # from all three splits (train / val / test).
-    --min_samples_per_class 30
+    --min_samples_per_class 10
 
     # --------------------------------------------------------------------------
     # SEASON DEFINITION
@@ -107,13 +107,13 @@ ARGS=(
     #   A window crossing a year boundary is supported (year_offset=1).
     #   Example single season:  '{"s1": ["2021-04-01", "2021-09-30"]}'
     #   Example two seasons:    '{"s1": ["2021-04-01", "2021-09-30"], "s2": ["2021-10-01", "2022-03-31"]}'
-    --season_windows '{"s1": ["2024-09-01", "2025-08-31"]}'
+    --season_windows '{"s1": ["2024-10-01", "2025-07-31"]}'
 
     # Fraction of a season's timestep slots that must fall inside the selected
     # window for that season to contribute crop-type supervision during training.
     # Lower = more permissive (important when augmentation shifts the window).
     # Range: 0.0–1.0   Default: 0.5
-    --train_min_season_coverage 1.0
+    --train_min_season_coverage 0.75
 
     # Same threshold for val / test splits.
     # Default 1.0 requires all slots to be present.
@@ -167,11 +167,11 @@ ARGS=(
 
     # Balancing strategy for classes within each task head.
     # Choices: balanced (default) | log | effective | none
-    # --class_balancing_method "balanced"
+    --class_balancing_method "balanced"
 
     # Clip extreme sampler weights to prevent training instability.
-    --balancing_clip_min 0.05
-    --balancing_clip_max 5.0
+    --balancing_clip_min 0.1
+    --balancing_clip_max 3.0
 
     # Down-weight spatially over-represented areas to improve geographic
     # generalization. Provide either a pre-computed group column or a grid size.
@@ -195,7 +195,7 @@ ARGS=(
     # --head_learning_rate 1e-2
 
     # Target learning rate once the encoder is unfrozen.
-    # --full_learning_rate 1e-3
+    --full_learning_rate 1e-4
 
     # After unfreezing the encoder, linearly ramp the LR over this many epochs
     # before reaching --full_learning_rate (avoids a sudden gradient spike).
@@ -212,12 +212,12 @@ ARGS=(
     # --------------------------------------------------------------------------
 
     # Can be increased on larger machines / GPU.
-    --batch_size 1024
+    --batch_size 512
 
     # Stop training after this many epochs without validation improvement.
     # On smaller datasets the model may need longer to escape a local minimum,
     # so consider raising this value.
-    --patience 7
+    --patience 5
 
     # DataLoader worker processes. Set to 0 for single-process loading (easier
     # to debug), or match the number of available CPU cores for speed.
@@ -232,7 +232,7 @@ ARGS=(
     # 0.0 disables EMA entirely (raw training model is used for val/checkpoint).
     # Effective lookback ≈ 1/alpha epochs (alpha=0.1 → ~10-epoch window).
     # Suggested range: 0.1 – 0.3.
-    --model_ema_alpha 0.6
+    --model_ema_alpha 0.7
 
     # --------------------------------------------------------------------------
     # HEAD ARCHITECTURE
@@ -243,7 +243,7 @@ ARGS=(
     #             recommended when training data is limited.
     #   "mlp"    — a two-layer MLP (Linear → ReLU → Dropout → Linear). Can
     #             improve accuracy with sufficient data.
-    --head_type "linear"
+    --head_type "mlp"
 
     # Hidden layer width for MLP heads.
     # Only used when --head_type is "mlp"; ignored for linear heads.
