@@ -666,51 +666,28 @@ def process_tile(
     # Track original nodata pixels
     ct_nodata_mask = np.any(raw_ct == NODATA, axis=0)  # (H, W)
 
-    # Normalise raw 0-100 probability values to [0, 1] float32.
-    # Smoothing is intentionally skipped: inference already produced spatially
-    # smooth probabilities; applying the kernel again would over-smooth.
-    ct_raw_f = raw_ct.astype("float32")
-    ct_raw_f[:, ct_nodata_mask] = 0.0
-    band_sum = ct_raw_f.sum(axis=0)
-    band_sum[band_sum == 0] = 1.0
-    ct_probs_norm = ct_raw_f / band_sum  # float32 (N, H, W), values in [0, 1]
-
-    # Apply cropland mask in the original CRS (grids must match).
-    if clf.shape == (ct_height, ct_width):
-        ct_probs_norm[:, clf == 0] = 0.0
-        ct_probs_norm[:, clf == NODATA] = 0.0
-    else:
-        logger.warning(
-            f"[{tile_id}] Cropland and croptype grids differ "
-            f"({clf.shape} vs ({ct_height}, {ct_width})); skipping cropland mask on croptype"
-        )
-
-    # ROI mask on probabilities (original CRS)
-    if roi_geom is not None and roi_crs is not None:
-        try:
-            ct_probs_norm = apply_roi_mask(
-                ct_probs_norm,
-                roi_geom,
-                roi_crs,
-                ct_src_crs,
-                ct_transform,
-                ct_height,
-                ct_width,
-                nodata=0.0,
-            ).astype("float32")
-        except Exception as e:
-            logger.error(f"[{tile_id}] ROI mask failed for croptype probs: {e}")
-
-    # Restore nodata sentinel on probability array (0-100 uint8) before writing
-    ct_probs_100 = np.clip(ct_probs_norm * 100, 0, 100).astype(np.uint8)
-    ct_probs_100[:, ct_nodata_mask] = NODATA
-    if clf.shape == (ct_height, ct_width):
-        ct_probs_100[:, clf == NODATA] = NODATA
+    # Shared helper: build class metadata tags for classification output
+    flat_classes = {
+        **CLASSES_DICT["single_crop_classes"],
+        **CLASSES_DICT["mixed_crops_classes"],
+        NO_CROP_VALUE: "no_crop",
+    }
+    clf_tags = {f"class_{k}": v for k, v in flat_classes.items()}
+    clf_tags.update(
+        {
+            "nodata_value": str(NODATA),
+            "no_crop_value": str(NO_CROP_VALUE),
+            "description": "Croptype classification",
+            "thresholds": str(THRESHOLDS),
+        }
+    )
 
     if DO_REPROJECT:
-        # Reproject each probability band bilinearly, then re-derive the croptype
-        # classification in the target CRS. This prevents staircase/blocky edges
-        # that result from nearest-neighbor reprojection of a discrete label raster.
+        # Strategy: reproject raw uint8 probability bands (0-100, NODATA=255)
+        # bilinearly using NODATA as the nodata sentinel. This is safe because
+        # valid values (0-100) are well clear of 255, so bilinear interpolation
+        # near tile edges cannot accidentally produce 255. All masking (cropland,
+        # ROI, nodata) is applied AFTER reprojection in the target CRS.
         dst_crs = CRS.from_epsg(TARGET_EPSG)
         bounds = rasterio.transform.array_bounds(
             ct_profile["height"], ct_profile["width"], ct_profile["transform"]
@@ -723,76 +700,112 @@ def process_tile(
             *bounds,
         )
 
-        # Reproject probability bands bilinearly
-        ct_probs_reproj = np.zeros((n_bands, dst_height, dst_width), dtype=np.float32)
-        nodata_band_reproj = np.zeros((dst_height, dst_width), dtype=np.uint8)
+        # Step 1: Reproject raw probability bands bilinearly
+        ct_probs_reproj_raw = np.full(
+            (n_bands, dst_height, dst_width), NODATA, dtype=np.uint8
+        )
         for i in range(n_bands):
             reproject(
-                source=ct_probs_norm[i],
-                destination=ct_probs_reproj[i],
+                source=raw_ct[i],
+                destination=ct_probs_reproj_raw[i],
                 src_transform=ct_profile["transform"],
                 src_crs=ct_profile["crs"],
                 dst_transform=dst_transform,
                 dst_crs=dst_crs,
                 resampling=Resampling.bilinear,
-                src_nodata=0.0,
-                dst_nodata=0.0,
+                src_nodata=NODATA,
+                dst_nodata=NODATA,
             )
-        # Reconstruct nodata mask: reproject original nodata band
-        reproject(
-            source=(
-                ct_nodata_mask
-                | (clf == NODATA if clf.shape == (ct_height, ct_width) else False)
-            ).astype(np.uint8),
-            destination=nodata_band_reproj,
-            src_transform=ct_profile["transform"],
-            src_crs=ct_profile["crs"],
-            dst_transform=dst_transform,
-            dst_crs=dst_crs,
-            resampling=Resampling.nearest,
-            src_nodata=0,
-            dst_nodata=0,
-        )
-        ct_nodata_reproj = nodata_band_reproj > 0
 
-        # Renormalize after reprojection
-        prob_sum_r = ct_probs_reproj.sum(axis=0)
+        # Step 2: Reproject cropland clf for masking in target CRS
+        clf_reproj = np.full((dst_height, dst_width), NODATA, dtype=np.uint8)
+        if clf.shape == (ct_height, ct_width):
+            reproject(
+                source=clf,
+                destination=clf_reproj,
+                src_transform=ct_profile["transform"],
+                src_crs=ct_profile["crs"],
+                dst_transform=dst_transform,
+                dst_crs=dst_crs,
+                resampling=Resampling.nearest,
+                src_nodata=NODATA,
+                dst_nodata=NODATA,
+            )
+        else:
+            logger.warning(
+                f"[{tile_id}] Cropland/croptype shape mismatch; "
+                "skipping cropland mask in target CRS"
+            )
+
+        # Step 3: Derive nodata mask in target CRS
+        ct_nodata_reproj = np.any(ct_probs_reproj_raw == NODATA, axis=0) | (
+            clf_reproj == NODATA
+        )
+
+        # Step 4: Normalize reprojected probs to [0, 1] float32
+        ct_probs_reproj_f = ct_probs_reproj_raw.astype("float32")
+        ct_probs_reproj_f[:, ct_nodata_reproj] = 0.0  # zero nodata before normalizing
+        ct_probs_reproj_f[:, clf_reproj == 0] = 0.0  # zero non-cropland pixels
+        prob_sum_r = ct_probs_reproj_f.sum(axis=0)
         prob_sum_r[prob_sum_r == 0] = 1.0
-        ct_probs_reproj = ct_probs_reproj / prob_sum_r
+        ct_probs_reproj_norm = ct_probs_reproj_f / prob_sum_r
 
-        # Derive classification in target CRS
+        # Step 5: Classify in target CRS
         clf_ct = get_croptype_prediction(
-            ct_probs_reproj, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES
+            ct_probs_reproj_norm,
+            prob_class_names,
+            CLASSES_DICT,
+            THRESHOLDS,
+            IGNORE_CLASSES,
         )
-        # Apply no-crop mask in target CRS (use reprojected prob sum as proxy)
-        no_prob_mask = ct_probs_reproj.sum(axis=0) == 0
-        clf_ct[no_prob_mask] = NO_CROP_VALUE
+        # Non-cropland → no_crop; nodata → NODATA (nodata overwrites no_crop)
+        clf_ct[clf_reproj == 0] = NO_CROP_VALUE
         clf_ct[ct_nodata_reproj] = NODATA
 
-        ct_probs_100_reproj = np.clip(ct_probs_reproj * 100, 0, 100).astype(np.uint8)
+        # Step 6: Apply ROI mask in target CRS (outside-ROI → NODATA, not no_crop)
+        if roi_geom is not None and roi_crs is not None:
+            try:
+                clf_ct = apply_roi_mask(
+                    clf_ct,
+                    roi_geom,
+                    roi_crs,
+                    dst_crs,
+                    dst_transform,
+                    dst_height,
+                    dst_width,
+                )
+            except Exception as e:
+                logger.error(
+                    f"[{tile_id}] ROI mask failed for croptype clf (reprojected): {e}"
+                )
+
+        # Step 7: Build output probability array (0-100, NODATA=255)
+        ct_probs_100_reproj = np.clip(ct_probs_reproj_norm * 100, 0, 100).astype(
+            np.uint8
+        )
         ct_probs_100_reproj[:, ct_nodata_reproj] = NODATA
+        if roi_geom is not None and roi_crs is not None:
+            try:
+                ct_probs_100_reproj = apply_roi_mask(
+                    ct_probs_100_reproj,
+                    roi_geom,
+                    roi_crs,
+                    dst_crs,
+                    dst_transform,
+                    dst_height,
+                    dst_width,
+                )
+            except Exception as e:
+                logger.error(
+                    f"[{tile_id}] ROI mask failed for croptype probs (reprojected): {e}"
+                )
 
         ct_reproj_profile = ct_profile.copy()
         ct_reproj_profile.update(
             crs=dst_crs, transform=dst_transform, width=dst_width, height=dst_height
         )
-
-        flat_classes = {
-            **CLASSES_DICT["single_crop_classes"],
-            **CLASSES_DICT["mixed_crops_classes"],
-            NO_CROP_VALUE: "no_crop",
-        }
-        clf_tags = {f"class_{k}": v for k, v in flat_classes.items()}
-        clf_tags.update(
-            {
-                "nodata_value": str(NODATA),
-                "no_crop_value": str(NO_CROP_VALUE),
-                "description": "Croptype classification",
-                "thresholds": str(THRESHOLDS),
-            }
-        )
         ct_cls_profile = ct_reproj_profile.copy()
-        ct_cls_profile.update(count=1)
+        ct_cls_profile.update(dtype="uint8", count=1, compress="deflate", nodata=NODATA)
         write_tile(
             clf_ct[np.newaxis],
             ct_cls_profile,
@@ -802,7 +815,9 @@ def process_tile(
             tags=clf_tags,
         )
         ct_probs_profile = ct_reproj_profile.copy()
-        ct_probs_profile.update(count=n_bands)
+        ct_probs_profile.update(
+            dtype="uint8", count=n_bands, compress="deflate", nodata=NODATA
+        )
         write_tile(
             ct_probs_100_reproj,
             ct_probs_profile,
@@ -814,30 +829,58 @@ def process_tile(
                 "description": "Per-class croptype probabilities (0-100)",
             },
         )
+
     else:
-        # No reprojection: derive classification directly from normalised probs
+        # No reprojection: normalise, mask, and classify in the original CRS.
+        ct_probs_f = raw_ct.astype("float32")
+        ct_probs_f[:, ct_nodata_mask] = 0.0
+        if clf.shape == (ct_height, ct_width):
+            ct_probs_f[:, clf == 0] = 0.0
+            ct_probs_f[:, clf == NODATA] = 0.0
+        band_sum = ct_probs_f.sum(axis=0)
+        band_sum[band_sum == 0] = 1.0
+        ct_probs_norm = ct_probs_f / band_sum  # float32 [0, 1]
+
         clf_ct = get_croptype_prediction(
             ct_probs_norm, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES
         )
-        no_prob_mask = ct_probs_norm.sum(axis=0) == 0
-        clf_ct[no_prob_mask] = NO_CROP_VALUE
+        if clf.shape == (ct_height, ct_width):
+            clf_ct[clf == 0] = NO_CROP_VALUE
+            clf_ct[clf == NODATA] = NODATA
         clf_ct[ct_nodata_mask] = NODATA
 
-        flat_classes = {
-            **CLASSES_DICT["single_crop_classes"],
-            **CLASSES_DICT["mixed_crops_classes"],
-            NO_CROP_VALUE: "no_crop",
-        }
-        clf_tags = {f"class_{k}": v for k, v in flat_classes.items()}
-        clf_tags.update(
-            {
-                "nodata_value": str(NODATA),
-                "no_crop_value": str(NO_CROP_VALUE),
-                "description": "Croptype classification",
-                "thresholds": str(THRESHOLDS),
-            }
-        )
-        ct_profile.update(count=1)
+        # ROI mask (outside-ROI → NODATA, not no_crop)
+        if roi_geom is not None and roi_crs is not None:
+            try:
+                clf_ct = apply_roi_mask(
+                    clf_ct,
+                    roi_geom,
+                    roi_crs,
+                    ct_src_crs,
+                    ct_transform,
+                    ct_height,
+                    ct_width,
+                )
+            except Exception as e:
+                logger.error(f"[{tile_id}] ROI mask failed for croptype: {e}")
+
+        ct_probs_100 = np.clip(ct_probs_norm * 100, 0, 100).astype(np.uint8)
+        ct_probs_100[:, ct_nodata_mask] = NODATA
+        if roi_geom is not None and roi_crs is not None:
+            try:
+                ct_probs_100 = apply_roi_mask(
+                    ct_probs_100,
+                    roi_geom,
+                    roi_crs,
+                    ct_src_crs,
+                    ct_transform,
+                    ct_height,
+                    ct_width,
+                )
+            except Exception as e:
+                logger.error(f"[{tile_id}] ROI mask failed for croptype probs: {e}")
+
+        ct_profile.update(dtype="uint8", count=1, compress="deflate", nodata=NODATA)
         write_tile(
             clf_ct[np.newaxis],
             ct_profile,
@@ -859,6 +902,7 @@ def process_tile(
                 "description": "Per-class croptype probabilities (0-100)",
             },
         )
+
     logger.info(f"[{tile_id}] Croptype classification → {ct_out}")
     logger.info(f"[{tile_id}] Croptype probabilities → {ct_probs_out}")
 
