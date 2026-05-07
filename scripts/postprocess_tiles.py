@@ -56,7 +56,7 @@ ROADS_DIR = Path(
     "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/auxdata/osm_roads_rasterized"
 )
 
-DO_SMOOTH_CROPLAND = False
+DO_SMOOTH_CROPLAND = True
 DO_SMOOTH_CROPTYPE = True
 DO_REPROJECT = True
 TARGET_EPSG = 32737
@@ -569,18 +569,64 @@ def process_tile(
             logger.error(f"[{tile_id}] ROI mask failed for cropland: {e}")
 
     cl_profile.update(dtype="uint8", count=2, compress="deflate", nodata=NODATA)
-    write_tile(
-        cl_out_array,
-        cl_profile,
-        cl_out,
-        do_reproject=DO_REPROJECT,
-        target_epsg=TARGET_EPSG,
-        band_descriptions=["Classification", "Probability"],
-        tags={
-            "nodata_value": str(NODATA),
-            "description": "Cropland classification with probability",
-        },
-    )
+
+    if DO_REPROJECT:
+        # Reproject the probability band with bilinear interpolation, then re-derive
+        # the classification in the target CRS. This avoids staircase/blocky edges that
+        # result from nearest-neighbor reprojection of an already-binary raster.
+        dst_crs = CRS.from_epsg(TARGET_EPSG)
+        bounds = rasterio.transform.array_bounds(
+            cl_profile["height"], cl_profile["width"], cl_profile["transform"]
+        )
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            cl_profile["crs"],
+            dst_crs,
+            cl_profile["width"],
+            cl_profile["height"],
+            *bounds,
+        )
+        prob_reproj = np.full((dst_height, dst_width), NODATA, dtype=np.uint8)
+        reproject(
+            source=cl_out_array[1],  # probability band (0-100, 255=nodata)
+            destination=prob_reproj,
+            src_transform=cl_profile["transform"],
+            src_crs=cl_profile["crs"],
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            resampling=Resampling.bilinear,
+            src_nodata=NODATA,
+            dst_nodata=NODATA,
+        )
+        nodata_reproj = prob_reproj == NODATA
+        clf_reproj = np.where(prob_reproj > 50, 1, 0).astype(np.uint8)
+        clf_reproj[nodata_reproj] = NODATA
+        cl_reproj_profile = cl_profile.copy()
+        cl_reproj_profile.update(
+            crs=dst_crs, transform=dst_transform, width=dst_width, height=dst_height
+        )
+        write_tile(
+            np.stack([clf_reproj, prob_reproj], axis=0),
+            cl_reproj_profile,
+            cl_out,
+            do_reproject=False,
+            band_descriptions=["Classification", "Probability"],
+            tags={
+                "nodata_value": str(NODATA),
+                "description": "Cropland classification with probability",
+            },
+        )
+    else:
+        write_tile(
+            cl_out_array,
+            cl_profile,
+            cl_out,
+            do_reproject=False,
+            band_descriptions=["Classification", "Probability"],
+            tags={
+                "nodata_value": str(NODATA),
+                "description": "Cropland classification with probability",
+            },
+        )
     logger.info(f"[{tile_id}] Cropland → {cl_out}")
 
     # -------------------------------------------------------------------
@@ -620,115 +666,200 @@ def process_tile(
     # Track original nodata pixels
     ct_nodata_mask = np.any(raw_ct == NODATA, axis=0)  # (H, W)
 
-    # Spatial smoothing (nodata pixels are zeroed inside, caller restores)
-    if DO_SMOOTH_CROPTYPE:
-        ct_probs_smoothed = spatial_smoothing(raw_ct.copy(), nodata=NODATA)
-        # ct_probs_smoothed: float32 (N, H, W), values in [0, 1]
-    else:
-        # Normalise raw 0-100 values to [0, 1] float32 without spatial filtering
-        ct_raw_f = raw_ct.astype("float32")
-        ct_raw_f[:, ct_nodata_mask] = 0.0
-        band_sum = ct_raw_f.sum(axis=0)
-        band_sum[band_sum == 0] = 1.0
-        ct_probs_smoothed = ct_raw_f / band_sum
+    # Normalise raw 0-100 probability values to [0, 1] float32.
+    # Smoothing is intentionally skipped: inference already produced spatially
+    # smooth probabilities; applying the kernel again would over-smooth.
+    ct_raw_f = raw_ct.astype("float32")
+    ct_raw_f[:, ct_nodata_mask] = 0.0
+    band_sum = ct_raw_f.sum(axis=0)
+    band_sum[band_sum == 0] = 1.0
+    ct_probs_norm = ct_raw_f / band_sum  # float32 (N, H, W), values in [0, 1]
 
-    # Croptype classification from (optionally smoothed) probabilities
-    clf_ct = get_croptype_prediction(
-        ct_probs_smoothed, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES
-    )  # (H, W) uint8
-
-    # Apply cropland mask using the in-memory (pre-reprojection) clf band.
-    # Both tiles originate from the same folder so their grids must match.
+    # Apply cropland mask in the original CRS (grids must match).
     if clf.shape == (ct_height, ct_width):
-        clf_ct[clf == 0] = NO_CROP_VALUE
-        clf_ct[clf == NODATA] = NODATA
-        # Zero out probs for non-cropland pixels before renormalizing
-        ct_probs_smoothed[:, clf == 0] = 0.0
-        ct_probs_smoothed[:, clf == NODATA] = 0.0
+        ct_probs_norm[:, clf == 0] = 0.0
+        ct_probs_norm[:, clf == NODATA] = 0.0
     else:
         logger.warning(
             f"[{tile_id}] Cropland and croptype grids differ "
             f"({clf.shape} vs ({ct_height}, {ct_width})); skipping cropland mask on croptype"
         )
 
-    # Restore nodata from the original raw tile
-    clf_ct[ct_nodata_mask] = NODATA
-
-    # Convert smoothed probs to 0-100 uint8, normalized per pixel to sum to 100
-    prob_sum = ct_probs_smoothed.sum(axis=0)  # (H, W)
-    prob_sum[prob_sum == 0] = 1.0
-    ct_probs_100 = np.clip(ct_probs_smoothed / prob_sum * 100, 0, 100).astype(np.uint8)
-
-    # Restore nodata on probability output
-    ct_probs_100[:, ct_nodata_mask] = NODATA
-    ct_probs_100[:, clf == NODATA] = NODATA
-
-    # ROI mask on both outputs
+    # ROI mask on probabilities (original CRS)
     if roi_geom is not None and roi_crs is not None:
         try:
-            clf_ct = apply_roi_mask(
-                clf_ct,
+            ct_probs_norm = apply_roi_mask(
+                ct_probs_norm,
                 roi_geom,
                 roi_crs,
                 ct_src_crs,
                 ct_transform,
                 ct_height,
                 ct_width,
-            )
-            ct_probs_100 = apply_roi_mask(
-                ct_probs_100,
-                roi_geom,
-                roi_crs,
-                ct_src_crs,
-                ct_transform,
-                ct_height,
-                ct_width,
-            )
+                nodata=0.0,
+            ).astype("float32")
         except Exception as e:
-            logger.error(f"[{tile_id}] ROI mask failed for croptype: {e}")
+            logger.error(f"[{tile_id}] ROI mask failed for croptype probs: {e}")
 
-    # Build class metadata tags for classification output
-    flat_classes = {
-        **CLASSES_DICT["single_crop_classes"],
-        **CLASSES_DICT["mixed_crops_classes"],
-        NO_CROP_VALUE: "no_crop",
-    }
-    clf_tags = {f"class_{k}": v for k, v in flat_classes.items()}
-    clf_tags.update(
-        {
-            "nodata_value": str(NODATA),
-            "no_crop_value": str(NO_CROP_VALUE),
-            "description": "Croptype classification",
-            "thresholds": str(THRESHOLDS),
+    # Restore nodata sentinel on probability array (0-100 uint8) before writing
+    ct_probs_100 = np.clip(ct_probs_norm * 100, 0, 100).astype(np.uint8)
+    ct_probs_100[:, ct_nodata_mask] = NODATA
+    if clf.shape == (ct_height, ct_width):
+        ct_probs_100[:, clf == NODATA] = NODATA
+
+    if DO_REPROJECT:
+        # Reproject each probability band bilinearly, then re-derive the croptype
+        # classification in the target CRS. This prevents staircase/blocky edges
+        # that result from nearest-neighbor reprojection of a discrete label raster.
+        dst_crs = CRS.from_epsg(TARGET_EPSG)
+        bounds = rasterio.transform.array_bounds(
+            ct_profile["height"], ct_profile["width"], ct_profile["transform"]
+        )
+        dst_transform, dst_width, dst_height = calculate_default_transform(
+            ct_profile["crs"],
+            dst_crs,
+            ct_profile["width"],
+            ct_profile["height"],
+            *bounds,
+        )
+
+        # Reproject probability bands bilinearly
+        ct_probs_reproj = np.zeros((n_bands, dst_height, dst_width), dtype=np.float32)
+        nodata_band_reproj = np.zeros((dst_height, dst_width), dtype=np.uint8)
+        for i in range(n_bands):
+            reproject(
+                source=ct_probs_norm[i],
+                destination=ct_probs_reproj[i],
+                src_transform=ct_profile["transform"],
+                src_crs=ct_profile["crs"],
+                dst_transform=dst_transform,
+                dst_crs=dst_crs,
+                resampling=Resampling.bilinear,
+                src_nodata=0.0,
+                dst_nodata=0.0,
+            )
+        # Reconstruct nodata mask: reproject original nodata band
+        reproject(
+            source=(
+                ct_nodata_mask
+                | (clf == NODATA if clf.shape == (ct_height, ct_width) else False)
+            ).astype(np.uint8),
+            destination=nodata_band_reproj,
+            src_transform=ct_profile["transform"],
+            src_crs=ct_profile["crs"],
+            dst_transform=dst_transform,
+            dst_crs=dst_crs,
+            resampling=Resampling.nearest,
+            src_nodata=0,
+            dst_nodata=0,
+        )
+        ct_nodata_reproj = nodata_band_reproj > 0
+
+        # Renormalize after reprojection
+        prob_sum_r = ct_probs_reproj.sum(axis=0)
+        prob_sum_r[prob_sum_r == 0] = 1.0
+        ct_probs_reproj = ct_probs_reproj / prob_sum_r
+
+        # Derive classification in target CRS
+        clf_ct = get_croptype_prediction(
+            ct_probs_reproj, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES
+        )
+        # Apply no-crop mask in target CRS (use reprojected prob sum as proxy)
+        no_prob_mask = ct_probs_reproj.sum(axis=0) == 0
+        clf_ct[no_prob_mask] = NO_CROP_VALUE
+        clf_ct[ct_nodata_reproj] = NODATA
+
+        ct_probs_100_reproj = np.clip(ct_probs_reproj * 100, 0, 100).astype(np.uint8)
+        ct_probs_100_reproj[:, ct_nodata_reproj] = NODATA
+
+        ct_reproj_profile = ct_profile.copy()
+        ct_reproj_profile.update(
+            crs=dst_crs, transform=dst_transform, width=dst_width, height=dst_height
+        )
+
+        flat_classes = {
+            **CLASSES_DICT["single_crop_classes"],
+            **CLASSES_DICT["mixed_crops_classes"],
+            NO_CROP_VALUE: "no_crop",
         }
-    )
+        clf_tags = {f"class_{k}": v for k, v in flat_classes.items()}
+        clf_tags.update(
+            {
+                "nodata_value": str(NODATA),
+                "no_crop_value": str(NO_CROP_VALUE),
+                "description": "Croptype classification",
+                "thresholds": str(THRESHOLDS),
+            }
+        )
+        ct_cls_profile = ct_reproj_profile.copy()
+        ct_cls_profile.update(count=1)
+        write_tile(
+            clf_ct[np.newaxis],
+            ct_cls_profile,
+            ct_out,
+            do_reproject=False,
+            band_descriptions=["Classification"],
+            tags=clf_tags,
+        )
+        ct_probs_profile = ct_reproj_profile.copy()
+        ct_probs_profile.update(count=n_bands)
+        write_tile(
+            ct_probs_100_reproj,
+            ct_probs_profile,
+            ct_probs_out,
+            do_reproject=False,
+            band_descriptions=[f"probability_{name}" for name in prob_class_names],
+            tags={
+                "nodata_value": str(NODATA),
+                "description": "Per-class croptype probabilities (0-100)",
+            },
+        )
+    else:
+        # No reprojection: derive classification directly from normalised probs
+        clf_ct = get_croptype_prediction(
+            ct_probs_norm, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES
+        )
+        no_prob_mask = ct_probs_norm.sum(axis=0) == 0
+        clf_ct[no_prob_mask] = NO_CROP_VALUE
+        clf_ct[ct_nodata_mask] = NODATA
 
-    ct_profile.update(dtype="uint8", count=1, compress="deflate", nodata=NODATA)
-    write_tile(
-        clf_ct[np.newaxis],  # (1, H, W)
-        ct_profile,
-        ct_out,
-        do_reproject=DO_REPROJECT,
-        target_epsg=TARGET_EPSG,
-        band_descriptions=["Classification"],
-        tags=clf_tags,
-    )
+        flat_classes = {
+            **CLASSES_DICT["single_crop_classes"],
+            **CLASSES_DICT["mixed_crops_classes"],
+            NO_CROP_VALUE: "no_crop",
+        }
+        clf_tags = {f"class_{k}": v for k, v in flat_classes.items()}
+        clf_tags.update(
+            {
+                "nodata_value": str(NODATA),
+                "no_crop_value": str(NO_CROP_VALUE),
+                "description": "Croptype classification",
+                "thresholds": str(THRESHOLDS),
+            }
+        )
+        ct_profile.update(count=1)
+        write_tile(
+            clf_ct[np.newaxis],
+            ct_profile,
+            ct_out,
+            do_reproject=False,
+            band_descriptions=["Classification"],
+            tags=clf_tags,
+        )
+        ct_probs_profile = ct_profile.copy()
+        ct_probs_profile.update(count=n_bands)
+        write_tile(
+            ct_probs_100,
+            ct_probs_profile,
+            ct_probs_out,
+            do_reproject=False,
+            band_descriptions=[f"probability_{name}" for name in prob_class_names],
+            tags={
+                "nodata_value": str(NODATA),
+                "description": "Per-class croptype probabilities (0-100)",
+            },
+        )
     logger.info(f"[{tile_id}] Croptype classification → {ct_out}")
-
-    ct_probs_profile = ct_profile.copy()
-    ct_probs_profile.update(count=n_bands)
-    write_tile(
-        ct_probs_100,
-        ct_probs_profile,
-        ct_probs_out,
-        do_reproject=DO_REPROJECT,
-        target_epsg=TARGET_EPSG,
-        band_descriptions=[f"probability_{name}" for name in prob_class_names],
-        tags={
-            "nodata_value": str(NODATA),
-            "description": "Per-class croptype probabilities (0-100)",
-        },
-    )
     logger.info(f"[{tile_id}] Croptype probabilities → {ct_probs_out}")
 
 
