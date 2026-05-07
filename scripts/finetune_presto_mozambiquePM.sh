@@ -27,10 +27,10 @@ ARGS=(
     # --------------------------------------------------------------------------
 
     # Short descriptive tag appended to the auto-generated experiment folder name.
-    --experiment_tag "Mozambique-PerfectiveMaintenance"
+    --experiment_tag "Mozambique-PerfectiveMaintenance-PGPremove40"
 
     # Root directory where the timestamped experiment folder will be created.
-    --base_output_dir "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/models"
+    --base_output_dir "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/models/kristof"
 
     # --------------------------------------------------------------------------
     # INPUT DATA
@@ -38,6 +38,7 @@ ARGS=(
 
     # One or more parquet files with extracted time-series samples.
     # Omit to use the default global extraction list (requires VPN / cluster access).
+    --parquet_files "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240701-20251031_NO-EXP.parquet"
     --parquet_files "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240701-20251031_NO-EXP.parquet"
 
     # Temporal resolution of the input data.
@@ -50,20 +51,21 @@ ARGS=(
     # Set an integer to hard-cap the window (e.g. 18 for a 1.5-year window;
     # also enables temporal augmentation when --augment is set).
     --max_timesteps_trim 16
+    --max_timesteps_trim 16
 
     # Optional: CSV files that pin specific sample IDs to val / test / ignore.
     # Each CSV must contain a "sample_id" column.
     # When omitted, a random stratified 70/15/15 split is used.
-    --val_samples_file     "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_60_val_sample_ids.csv"
-    --test_samples_file    "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_60_val_sample_ids.csv"
-    --ignore_samples_file  "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_60_val_sample_ids.csv"
+    --val_samples_file     "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_45_withMaize_Maize_remove_20_val_sample_ids.csv"
+    --test_samples_file    "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_45_withMaize_Maize_remove_20_test_sample_ids.csv"
+    --ignore_samples_file  "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/data_split/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_PGP_remove_45_withMaize_Maize_remove_20_ignore_sample_ids.csv"
 
     # Optional: path to the intermediate wide-format parquet (the expensive pivot/merge
     # step output). If the file already exists it is reused, skipping data preparation.
     # If it does not exist yet it is created there so future runs can reuse it.
     # On HPC the shared /projects/worldcereal directory is used automatically
     # when this is not set.
-    # --wide_parquet_path "./moz_pm_wide.parquet"
+    --wide_parquet_path "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240701-20251031_NO-EXP_wide.parquet"
 
     # --------------------------------------------------------------------------
     # CLASS MAPPINGS
@@ -73,10 +75,11 @@ ARGS=(
     # Required structure: { "KEY": { "ewoc_code": "label", ... }, ... }
     # Omit to fetch the latest official mappings from SharePoint
     # (requires SharePoint credentials configured on your machine).
-    --class_mappings_file "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/class_mappings_mozambique.json"
+    --class_mappings_file "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/class_mappings_mozambique_new.json"
 
     # Key inside the mappings JSON for the landcover head.
     # Default: LANDCOVER10
+    --landcover_classes_key "CROPLAND2"
     --landcover_classes_key "CROPLAND2"
 
     # Key inside the mappings JSON for the crop-type head.
@@ -86,6 +89,7 @@ ARGS=(
     # Mapping key used when assigning initial ewoc_code → label during data prep.
     # Usually matches --landcover_classes_key.
     --initial_mapping "CROPLAND2"
+    --initial_mapping "CROPLAND2"
 
     # Comma-separated landcover labels treated as "cropland" for the binary
     # cropland gate inside the crop-type head. Optionally include perennial
@@ -94,7 +98,7 @@ ARGS=(
 
     # Classes with fewer training samples than this threshold are dropped
     # from all three splits (train / val / test).
-    --min_samples_per_class 10
+    --min_samples_per_class 5
 
     # --------------------------------------------------------------------------
     # SEASON DEFINITION
@@ -108,17 +112,19 @@ ARGS=(
     #   Example single season:  '{"s1": ["2021-04-01", "2021-09-30"]}'
     #   Example two seasons:    '{"s1": ["2021-04-01", "2021-09-30"], "s2": ["2021-10-01", "2022-03-31"]}'
     --season_windows '{"s1": ["2024-10-01", "2025-07-31"]}'
+    --season_windows '{"s1": ["2024-10-01", "2025-07-31"]}'
 
     # Fraction of a season's timestep slots that must fall inside the selected
     # window for that season to contribute crop-type supervision during training.
     # Lower = more permissive (important when augmentation shifts the window).
     # Range: 0.0–1.0   Default: 0.5
     --train_min_season_coverage 0.75
+    --train_min_season_coverage 0.75
 
     # Same threshold for val / test splits.
     # Default 1.0 requires all slots to be present.
     # Lower (e.g. 0.8) if your season is longer than the timestep window.
-    # --eval_min_season_coverage 1.0
+    --eval_min_season_coverage 1
 
     # --------------------------------------------------------------------------
     # DATA QUALITY & OUTLIER FILTERING
@@ -167,16 +173,16 @@ ARGS=(
 
     # Balancing strategy for classes within each task head.
     # Choices: balanced (default) | log | effective | none
-    --class_balancing_method "balanced"
+    --class_balancing_method "log"
 
     # Clip extreme sampler weights to prevent training instability.
-    --balancing_clip_min 0.1
-    --balancing_clip_max 3.0
+    --balancing_clip_min 0.01
+    --balancing_clip_max 2
 
     # Down-weight spatially over-represented areas to improve geographic
     # generalization. Provide either a pre-computed group column or a grid size.
     # --spatial_group_column "tile_id"    # use a pre-existing group column
-    # --spatial_bin_size_deg 5.0          # or auto-bin by this grid size (degrees)
+    # --spatial_bin_size_deg 3.0          # or auto-bin by this grid size (degrees)
     # --spatial_balancing_method "log"
 
     # --------------------------------------------------------------------------
@@ -196,6 +202,7 @@ ARGS=(
 
     # Target learning rate once the encoder is unfrozen.
     --full_learning_rate 1e-4
+    --full_learning_rate 1e-4
 
     # After unfreezing the encoder, linearly ramp the LR over this many epochs
     # before reaching --full_learning_rate (avoids a sudden gradient spike).
@@ -213,10 +220,12 @@ ARGS=(
 
     # Can be increased on larger machines / GPU.
     --batch_size 512
+    --batch_size 512
 
     # Stop training after this many epochs without validation improvement.
     # On smaller datasets the model may need longer to escape a local minimum,
     # so consider raising this value.
+    --patience 5
     --patience 5
 
     # DataLoader worker processes. Set to 0 for single-process loading (easier
@@ -232,7 +241,23 @@ ARGS=(
     # 0.0 disables EMA entirely (raw training model is used for val/checkpoint).
     # Effective lookback ≈ 1/alpha epochs (alpha=0.1 → ~10-epoch window).
     # Suggested range: 0.1 – 0.3.
-    --model_ema_alpha 0.7
+    --model_ema_alpha 0.4
+
+    # Metric used to select the best checkpoint and drive early stopping.
+    # 'val_loss' (default) or 'ct_f1' — use ct_f1 when the val set is small
+    # and the combined loss is dominated by noise from rare CT classes.
+    --checkpoint_metric "ct_f1"
+
+    # --------------------------------------------------------------------------
+    # CLASS WEIGHT MULTIPLIERS
+    # --------------------------------------------------------------------------
+
+    # Optional per-class sampling weight multipliers for the crop-type head.
+    # Applied on top of the automatic class balancing (before renormalization).
+    # Boost a class here to oversample it beyond what the balancer gives.
+    # Maize recall is very low likely due to confusion with pigeon_pea;
+    # boosting maize trades some pigeon_pea performance in its favour.
+    --class_weight_multipliers '{"maize": 7.0, "pigeon_pea": 0.5}'
 
     # --------------------------------------------------------------------------
     # HEAD ARCHITECTURE
@@ -244,6 +269,7 @@ ARGS=(
     #   "mlp"    — a two-layer MLP (Linear → ReLU → Dropout → Linear). Can
     #             improve accuracy with sufficient data.
     --head_type "mlp"
+    --head_type "mlp"
 
     # Hidden layer width for MLP heads.
     # Only used when --head_type is "mlp"; ignored for linear heads.
@@ -254,8 +280,8 @@ ARGS=(
     # --seasonal_head_dropout 0.0
 
     # Relative loss weight for each task head.
-    # --seasonal_loss_landcover_weight 1.0
-    # --seasonal_loss_croptype_weight  1.0
+    --seasonal_loss_landcover_weight 0.5
+    --seasonal_loss_croptype_weight  1
 
     # --------------------------------------------------------------------------
     # LOGGING & DIAGNOSTICS
