@@ -25,7 +25,7 @@ SEASONAL_MODEL_ZIP="https://s3.waw3-1.cloudferro.com/project_dependencies/worldc
 GRID_PATH="/vitodata/worldcereal/data/COP4GEOGLAM/mozambique/auxdata/zambezia_blocks_20k_utm.gpkg"
 
 # Parameter specifying output folder
-OUTPUT_FOLDER="/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/production"
+OUTPUT_FOLDER="/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/production/v5_PM/raw"
 
 ## Alternatively, you can specify the season specifications directly as a JSON string,
 ## and provide an explicit start and end date of the processing window encompassing both seasons.
