@@ -1,5 +1,7 @@
 import glob
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 
 import geopandas as gpd
 import rasterio
@@ -80,8 +82,8 @@ def createRoadsMask(raster_file,roads_file,roads_folder,data=None):
 
 if __name__ == "__main__":
 
-    activation = "mozambique"
-    production_name = "v4_landcover"
+    activation = "mozambique_pm"
+    production_name = "v5_PM"
 
     main_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/"
 
@@ -102,6 +104,10 @@ if __name__ == "__main__":
     #buildings = gpd.read_file(shapefile_buildings)
     roads = gpd.read_file(shapefile_roads)
 
-    for raster_file in tqdm(raster_files):
-        createRoadsMask(raster_file,shapefile_roads,roads_folder,data=roads)
-        #createRoadsMask(raster_file,shapefile_buildings,buildings_folder,data=buildings)
+    worker_fn = partial(createRoadsMask, roads_file=shapefile_roads, roads_folder=roads_folder, data=roads)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(worker_fn, f): f for f in raster_files}
+        for future in tqdm(as_completed(futures), total=len(raster_files)):
+            future.result()
+        #worker_fn_buildings = partial(createRoadsMask, roads_file=shapefile_buildings, roads_folder=buildings_folder, data=buildings)
