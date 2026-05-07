@@ -39,7 +39,6 @@ ARGS=(
     # One or more parquet files with extracted time-series samples.
     # Omit to use the default global extraction list (requires VPN / cluster access).
     --parquet_files "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240701-20251031_NO-EXP.parquet"
-    --parquet_files "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/trainingdata/2025_MOZ_COPERNICUS4GEOGLAM_ITC_POINT_EXP_POLY_MERGED_20240701-20251031_NO-EXP.parquet"
 
     # Temporal resolution of the input data.
     #   "month"  → 12 timesteps / year  (default, most common)
@@ -50,7 +49,6 @@ ARGS=(
     # "auto" (default) keeps all timesteps present in the data.
     # Set an integer to hard-cap the window (e.g. 18 for a 1.5-year window;
     # also enables temporal augmentation when --augment is set).
-    --max_timesteps_trim 16
     --max_timesteps_trim 16
 
     # Optional: CSV files that pin specific sample IDs to val / test / ignore.
@@ -80,7 +78,6 @@ ARGS=(
     # Key inside the mappings JSON for the landcover head.
     # Default: LANDCOVER10
     --landcover_classes_key "CROPLAND2"
-    --landcover_classes_key "CROPLAND2"
 
     # Key inside the mappings JSON for the crop-type head.
     # Common value: CROPTYPE24
@@ -88,7 +85,6 @@ ARGS=(
 
     # Mapping key used when assigning initial ewoc_code → label during data prep.
     # Usually matches --landcover_classes_key.
-    --initial_mapping "CROPLAND2"
     --initial_mapping "CROPLAND2"
 
     # Comma-separated landcover labels treated as "cropland" for the binary
@@ -112,13 +108,11 @@ ARGS=(
     #   Example single season:  '{"s1": ["2021-04-01", "2021-09-30"]}'
     #   Example two seasons:    '{"s1": ["2021-04-01", "2021-09-30"], "s2": ["2021-10-01", "2022-03-31"]}'
     --season_windows '{"s1": ["2024-10-01", "2025-07-31"]}'
-    --season_windows '{"s1": ["2024-10-01", "2025-07-31"]}'
 
     # Fraction of a season's timestep slots that must fall inside the selected
     # window for that season to contribute crop-type supervision during training.
     # Lower = more permissive (important when augmentation shifts the window).
     # Range: 0.0–1.0   Default: 0.5
-    --train_min_season_coverage 0.75
     --train_min_season_coverage 0.75
 
     # Same threshold for val / test splits.
@@ -202,7 +196,6 @@ ARGS=(
 
     # Target learning rate once the encoder is unfrozen.
     --full_learning_rate 1e-4
-    --full_learning_rate 1e-4
 
     # After unfreezing the encoder, linearly ramp the LR over this many epochs
     # before reaching --full_learning_rate (avoids a sudden gradient spike).
@@ -220,12 +213,10 @@ ARGS=(
 
     # Can be increased on larger machines / GPU.
     --batch_size 512
-    --batch_size 512
 
     # Stop training after this many epochs without validation improvement.
     # On smaller datasets the model may need longer to escape a local minimum,
     # so consider raising this value.
-    --patience 5
     --patience 5
 
     # DataLoader worker processes. Set to 0 for single-process loading (easier
@@ -268,7 +259,6 @@ ARGS=(
     #             recommended when training data is limited.
     #   "mlp"    — a two-layer MLP (Linear → ReLU → Dropout → Linear). Can
     #             improve accuracy with sufficient data.
-    --head_type "mlp"
     --head_type "mlp"
 
     # Hidden layer width for MLP heads.
