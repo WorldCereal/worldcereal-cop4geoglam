@@ -56,11 +56,12 @@ ROADS_DIR = Path(
     "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/auxdata/osm_roads_rasterized"
 )
 
-DO_SMOOTH = False
+DO_SMOOTH_CROPLAND = False
+DO_SMOOTH_CROPTYPE = True
 DO_REPROJECT = True
 TARGET_EPSG = 32737
 
-NUM_WORKERS = 1
+NUM_WORKERS = 4
 NODATA = 255
 NO_CROP_VALUE = 254
 
@@ -418,31 +419,51 @@ def get_croptype_prediction(
     """
     other_mixed_value = max(classes_dict["mixed_crops_classes"].keys())
 
-    # Build concatenated label string per pixel by iterating single classes
-    # in their label-key order (so string encoding is deterministic).
-    concat = np.full(probs.shape[1:], "", dtype=object)
-    for label, class_name in classes_dict["single_crop_classes"].items():
-        if class_name in ignore_classes:
-            continue
-        if class_name not in prob_class_names:
+    # Build per-class index lookup (class_name → band index in probs)
+    single_classes = [
+        (label, class_name)
+        for label, class_name in classes_dict["single_crop_classes"].items()
+        if class_name not in ignore_classes and class_name in prob_class_names
+    ]
+    for class_name in classes_dict["single_crop_classes"].values():
+        if class_name not in ignore_classes and class_name not in prob_class_names:
             logger.warning(
                 f"Class '{class_name}' not found in probability bands {prob_class_names}; skipping"
             )
-            continue
+
+    # Build concatenated label string per pixel by iterating single classes
+    # in their label-key order (so string encoding is deterministic).
+    concat = np.full(probs.shape[1:], "", dtype=object)
+    for label, class_name in single_classes:
         band_idx = prob_class_names.index(class_name)
         thr = thresholds.get(class_name, THRESHOLD_DEFAULT)
         concat[probs[band_idx] >= thr] += str(label)
 
-    # Pixels where no class passed threshold → other_mixed
-    concat[concat == ""] = str(other_mixed_value)
-
-    # Map unrecognised mixed combinations to other_mixed
     all_valid = set(
         str(k)
         for k in list(classes_dict["single_crop_classes"].keys())
         + list(classes_dict["mixed_crops_classes"].keys())
     )
-    concat[~np.isin(concat, list(all_valid))] = str(other_mixed_value)
+
+    # Build a (H*W,) argmax array over the active single-class bands for fallback use.
+    # Index into single_classes list (not band index directly).
+    active_band_indices = [prob_class_names.index(cn) for _, cn in single_classes]
+    active_labels = np.array([lbl for lbl, _ in single_classes], dtype=np.uint8)
+    if active_band_indices:
+        active_probs = probs[active_band_indices]  # (N_active, H, W)
+        argmax_label = active_labels[np.argmax(active_probs, axis=0)]  # (H, W)
+    else:
+        argmax_label = np.full(probs.shape[1:], other_mixed_value, dtype=np.uint8)
+
+    # Pixels where no class passed threshold → fall back to argmax single class.
+    # These are typically sub-threshold field edges, not genuinely unknown crops.
+    no_class_mask = concat == ""
+    concat[no_class_mask] = argmax_label[no_class_mask].astype(str)
+
+    # Unrecognised mixed combinations (multiple classes fired but combo not in CLASSES_DICT)
+    # → keep as other_crop/mixtures (200): could be an untrained crop species.
+    unrecognised_mask = ~np.isin(concat, list(all_valid))
+    concat[unrecognised_mask] = str(other_mixed_value)
 
     return concat.astype(np.uint8)
 
@@ -515,7 +536,7 @@ def process_tile(
     nodata_mask = raw_cl[1] == NODATA  # (H, W)
 
     # Smooth probability bands only (bands 2 and 3: prob_cropland, prob_other)
-    if DO_SMOOTH:
+    if DO_SMOOTH_CROPLAND:
         probs_cl = spatial_smoothing(raw_cl[1:3].copy(), nodata=NODATA)
         # probs_cl: float32 (2, H, W), values in [0, 1]
         clf = np.where(probs_cl[0] > probs_cl[1], 1, 0).astype(np.uint8)
@@ -529,10 +550,12 @@ def process_tile(
 
     cl_out_array = np.stack([clf, prob_cl], axis=0)  # (2, H, W)
 
-    # Road mask — applied before ROI mask so roads inside ROI are still zeroed
+    # Road mask — applied before ROI mask so roads inside ROI are still zeroed.
+    # Also zero clf so road pixels are treated as non-cropland in the croptype pipeline.
     road_file = find_road_mask(tile_id, ROADS_DIR)
     if road_file is not None:
         cl_out_array = apply_road_mask(cl_out_array, road_file)
+        clf = apply_road_mask(clf[np.newaxis], road_file)[0]
     else:
         logger.warning(f"[{tile_id}] No road mask found in {ROADS_DIR}")
 
@@ -598,7 +621,7 @@ def process_tile(
     ct_nodata_mask = np.any(raw_ct == NODATA, axis=0)  # (H, W)
 
     # Spatial smoothing (nodata pixels are zeroed inside, caller restores)
-    if DO_SMOOTH:
+    if DO_SMOOTH_CROPTYPE:
         ct_probs_smoothed = spatial_smoothing(raw_ct.copy(), nodata=NODATA)
         # ct_probs_smoothed: float32 (N, H, W), values in [0, 1]
     else:
@@ -722,7 +745,8 @@ def main() -> None:
     logger.info(
         f"  ROI          : '{ROI_NAME}' ({ROI_GPKG.name}, field='{ROI_NAME_FIELD}')"
     )
-    logger.info(f"  SMOOTH       : {DO_SMOOTH}")
+    logger.info(f"  SMOOTH_CROPLAND : {DO_SMOOTH_CROPLAND}")
+    logger.info(f"  SMOOTH_CROPTYPE : {DO_SMOOTH_CROPTYPE}")
     logger.info(
         f"  REPROJECT    : {DO_REPROJECT}"
         + (f" → EPSG:{TARGET_EPSG}" if DO_REPROJECT else "")
