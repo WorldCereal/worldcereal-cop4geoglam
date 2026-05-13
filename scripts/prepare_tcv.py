@@ -27,6 +27,15 @@ def identifyDifficultPGP(difficult_percentage = 0.6):
     difficult_pgp_samples = pgp_to_maize[pgp_to_maize["distance_to_maize"] <= threshold]["ssu_id"].unique().tolist()
     return(difficult_pgp_samples)
 
+def identifyDifficultMaize(difficult_percentage = 0.6):
+    feature_distance_folder = "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/feature_distance"
+    maize_to_pgp = pd.read_parquet(os.path.join(feature_distance_folder,"maize_distance_to_pigeon_pea.parquet"))
+
+    threshold = maize_to_pgp["distance_to_pigeon_pea"].quantile(difficult_percentage)
+    #select the sample_ids of the maize points that are below this threshold, as these are the ones closest to pigeon pea in feature space and thus likely more difficult to classify
+    difficult_maize_samples = maize_to_pgp[maize_to_pgp["distance_to_pigeon_pea"] <= threshold]["ssu_id"].unique().tolist()
+    return(difficult_maize_samples)
+
 def identifySamplesWithTrees(activation,ref_id):
 
     activation_folder = os.path.join("/vitodata/worldcereal/data/COP4GEOGLAM/",activation)
@@ -104,7 +113,7 @@ def ignoreSamples(tcv_folder,run_prefix,datafile,ignore_samples=[],overwrite=Fal
     return ignore_ids
 
 def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,overwrite=False,ignore_samples = [],ignoreMaize=False,removePGP_percentage=0.4,
-              addPGP_to_ignore=False,output_name=None):
+              removeMaize_percentage=0.2,addPGP_to_ignore=False,output_name=None,do_SP_trick=False):
 
     activation_folder = os.path.join("/vitodata/worldcereal/data/COP4GEOGLAM/",activation)
     trainingdata_folder = os.path.join(activation_folder,"trainingdata")
@@ -194,9 +203,22 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
         train_val_df = merged_mono_ssu[merged_mono_ssu["ssu_id"].isin(train_val_ssu_ids)]
         train_ssu, val_ssu = train_test_split(train_val_df[["ssu_id","ewoc_code","finetune_class"]], test_size=cal_size/(1-test_size), random_state=random_state, stratify=train_val_df["finetune_class"])
 
-        if removePGP_percentage > 0:
-            difficultPGP = identifyDifficultPGP(difficult_percentage=removePGP_percentage)
-            dPGP_SSU = set(difficultPGP)
+        #check for sweet potato, make sure that at least 2 ssu_id are in both val and test
+        if do_SP_trick:
+            sp_to_val_sample_id = "2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_40856_53_poly_3755"
+            sp_to_test_sample_id = "2025_MOZ_COPERNICUS4GEOGLAM_POINT_110_74145_15_poly_1209"
+
+            sp_to_val_ssu_id = merged_mono[merged_mono["sample_id"]==sp_to_val_sample_id]["ssu_id"].unique()[0]
+            sp_to_test_ssu_id = merged_mono[merged_mono["sample_id"]==sp_to_test_sample_id]["ssu_id"].unique()[0]
+
+            to_val = merged_mono_ssu[merged_mono_ssu["ssu_id"]==sp_to_val_ssu_id][["ssu_id","ewoc_code","finetune_class"]]
+            to_test = merged_mono_ssu[merged_mono_ssu["ssu_id"]==sp_to_test_ssu_id][["ssu_id","ewoc_code","finetune_class"]]
+
+            val_ssu = pd.concat([val_ssu,to_val], ignore_index=True)
+            test_ssu = pd.concat([test_ssu,to_test], ignore_index=True)
+            #remove them from train
+            train_ssu = train_ssu[~train_ssu["ssu_id"].isin([sp_to_val_ssu_id,sp_to_test_ssu_id])].copy()
+
 
         merged_mono["finetune_class"] = merged_mono["croptype"]
         merged_mono["finetune_class"] = merged_mono["finetune_class"].fillna(merged_mono["landcover"])
@@ -211,6 +233,8 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
 
         # Difficult SSUs that are actually present in the current training split
         if removePGP_percentage > 0:
+            difficultPGP = identifyDifficultPGP(difficult_percentage=removePGP_percentage)
+            dPGP_SSU = set(difficultPGP)
             dpgp_in_train = np.array(
                 train_df.loc[train_df["ssu_id"].isin(dPGP_SSU), "ssu_id"].drop_duplicates()
             )
@@ -245,6 +269,43 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
                     val_df = pd.concat([val_df, move_to_val_df], ignore_index=True)
                     test_df = pd.concat([test_df, move_to_test_df], ignore_index=True)
 
+            if removeMaize_percentage > 0:
+                difficultMaize = identifyDifficultMaize(difficult_percentage=removeMaize_percentage/100)
+                dMaiz_SSU = set(difficultMaize)
+                maize_in_train = np.array(
+                    train_df.loc[train_df["ssu_id"].isin(dMaiz_SSU), "ssu_id"].drop_duplicates()
+                )
+
+                if len(maize_in_train) > 0:
+                    rng = np.random.default_rng(random_state)
+                    rng.shuffle(maize_in_train)
+
+                    # Split difficult SSUs approximately 50/50 between val and test
+                    half = len(maize_in_train) // 2
+
+                    maize_to_val = set(maize_in_train[:half])
+                    maize_to_test = set(maize_in_train[half:])
+
+                    # Select rows to move
+                    move_to_val_df = train_df[train_df["ssu_id"].isin(maize_to_val)].copy()
+                    move_to_test_df = train_df[train_df["ssu_id"].isin(maize_to_test)].copy()
+
+                    # Remove these SSUs from train
+                    train_df = train_df[
+                        ~train_df["ssu_id"].isin(maize_to_val | maize_to_test)
+                    ].copy()
+
+                    if addPGP_to_ignore:
+                        # Add the difficult Maize SSUs to the ignore list
+                        new_ignore_samples = set(move_to_val_df["sample_id"].unique()) | set(move_to_test_df["sample_id"].unique())
+                        ignore_samples = set(ignore_samples) | new_ignore_samples
+
+                    else:
+
+                        # Add them to val and test
+                        val_df = pd.concat([val_df, move_to_val_df], ignore_index=True)
+                        test_df = pd.concat([test_df, move_to_test_df], ignore_index=True)
+
         train_sample_id = train_df["sample_id"].unique()
         val_sample_id = val_df["sample_id"].unique()
         test_sample_id = test_df["sample_id"].unique()
@@ -274,7 +335,7 @@ def makeSplit(activation,ref_id,test_size=0.15,cal_size=0.15,random_state=42,ove
 
 if __name__ == "__main__":
 
-    remove_percentages = [40,45,50,55,60]
+    remove_percentages = [30,35,40,45,37,32]
 
     for remove_percentage in remove_percentages:
 
@@ -319,12 +380,16 @@ if __name__ == "__main__":
         ]
 
         overwrite = True
-        ignoreMaize = True
+        ignoreMaize = False
         removePGP_percentage = remove_percentage/100
+        removeMaize_percentage = 20
         addPGP_to_ignore = True
-        output_name = ref_id + f"_PGP_remove_{str(remove_percentage)}"
+        do_SP_trick = True
+        output_name = ref_id + f"_PGP_remove_{str(remove_percentage)}_withMaize_Maize_remove_{str(removeMaize_percentage)}"
 
         makeSplit(activation,ref_id,test_size=test_size,cal_size=cal_size,
                 overwrite=overwrite,ignore_samples = ignore_samples,ignoreMaize=ignoreMaize,
                 removePGP_percentage=removePGP_percentage,addPGP_to_ignore=addPGP_to_ignore,
-                output_name=output_name)
+                removeMaize_percentage=removeMaize_percentage,
+                output_name=output_name,
+                do_SP_trick=do_SP_trick)
