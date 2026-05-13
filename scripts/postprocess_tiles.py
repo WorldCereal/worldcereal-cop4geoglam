@@ -25,8 +25,12 @@ import rasterio
 from loguru import logger
 from rasterio.crs import CRS
 from rasterio.features import geometry_mask
-from rasterio.warp import Resampling, calculate_default_transform, reproject
-from rasterio.warp import transform_geom
+from rasterio.warp import (
+    Resampling,
+    calculate_default_transform,
+    reproject,
+    transform_geom,
+)
 from scipy.signal import convolve2d
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
@@ -60,6 +64,7 @@ DO_SMOOTH_CROPLAND = True
 DO_SMOOTH_CROPTYPE = True
 DO_REPROJECT = True
 TARGET_EPSG = 32737
+PROCESS_ARGMAX = False
 
 NUM_WORKERS = 4
 NODATA = 255
@@ -69,7 +74,7 @@ NO_CROP_VALUE = 254
 # Croptype classification parameters (from mozambique / v5_PM calibration)
 # ---------------------------------------------------------------------------
 
-IGNORE_CLASSES = []
+IGNORE_CLASSES: list[str] = []
 
 # Per-class detection thresholds (fraction, 0-1), keyed by class name.
 # Any class in CLASSES_DICT["single_crop_classes"] not listed here gets THRESHOLD_DEFAULT.
@@ -388,6 +393,7 @@ def get_croptype_prediction(
     classes_dict: dict,
     thresholds: dict[str, float],
     ignore_classes: list[str],
+    process_argmax: bool,
 ) -> np.ndarray:
     """Classify croptype probability bands into a single-band uint8 label map.
 
@@ -458,7 +464,10 @@ def get_croptype_prediction(
     # Pixels where no class passed threshold → fall back to argmax single class.
     # These are typically sub-threshold field edges, not genuinely unknown crops.
     no_class_mask = concat == ""
-    concat[no_class_mask] = argmax_label[no_class_mask].astype(str)
+    if process_argmax:
+        concat[no_class_mask] = argmax_label[no_class_mask].astype(str) #fallback to argmax single class
+    else:
+        concat[no_class_mask] = str(other_mixed_value)  # fallback to other_crop/mixtures
 
     # Unrecognised mixed combinations (multiple classes fired but combo not in CLASSES_DICT)
     # → keep as other_crop/mixtures (200): could be an untrained crop species.
@@ -757,6 +766,7 @@ def process_tile(
             CLASSES_DICT,
             THRESHOLDS,
             IGNORE_CLASSES,
+            PROCESS_ARGMAX,
         )
         # Non-cropland → no_crop; nodata → NODATA (nodata overwrites no_crop)
         clf_ct[clf_reproj == 0] = NO_CROP_VALUE
@@ -842,7 +852,7 @@ def process_tile(
         ct_probs_norm = ct_probs_f / band_sum  # float32 [0, 1]
 
         clf_ct = get_croptype_prediction(
-            ct_probs_norm, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES
+            ct_probs_norm, prob_class_names, CLASSES_DICT, THRESHOLDS, IGNORE_CLASSES, PROCESS_ARGMAX
         )
         if clf.shape == (ct_height, ct_width):
             clf_ct[clf == 0] = NO_CROP_VALUE
