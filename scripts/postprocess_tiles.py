@@ -64,7 +64,7 @@ DO_SMOOTH_CROPLAND = True
 DO_SMOOTH_CROPTYPE = True
 DO_REPROJECT = True
 TARGET_EPSG = 32737
-PROCESS_ARGMAX = False
+PROCESS_ARGMAX = True
 
 NUM_WORKERS = 4
 NODATA = 255
@@ -80,13 +80,13 @@ IGNORE_CLASSES: list[str] = []
 # Any class in CLASSES_DICT["single_crop_classes"] not listed here gets THRESHOLD_DEFAULT.
 THRESHOLD_DEFAULT = 0.5
 THRESHOLDS = {
-    "maize": 0.35,
-    "rice": 0.24,
-    "soybean": 0.16,
-    "sesame": 0.45,
-    "cassava": 0.30,
-    "sweet_potato": 0.25,
-    "pigeon_pea": 0.24,
+    "maize": 0.4, #default=0.35
+    "rice": 0.24, #default =0.24
+    "soybean": 0.2, #default=0.16
+    "sesame": 0.5, #default=0.45
+    "cassava": 0.25, #default=0.30
+    "sweet_potato": 0.2, #default=0.25
+    "pigeon_pea": 0.2, #default=0.24
 }
 
 CLASSES_DICT = {

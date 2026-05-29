@@ -29,10 +29,10 @@ CROPTYPE_INPUT_DIR = POSTPROCESSED_DIR / "croptype"
 FINAL_DIR = POSTPROCESSED_DIR / "final"
 
 CROPLAND_COLORMAP_JSON = Path(
-    "/home/kristofvt/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/colormap_cropland.json"
+    "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/production/colormap_cropland.json"
 )
 CROPTYPE_COLORMAP_JSON = Path(
-    "/home/kristofvt/git/worldcereal-cop4geoglam/src/worldcereal_cop4geoglam/data/mozambique/colormap_mozambique.json"
+    "/vitodata/worldcereal/data/COP4GEOGLAM/mozambique_pm/production/colormap_croptype.json"
 )
 
 OVERWRITE = False
